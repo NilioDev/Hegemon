@@ -24,11 +24,14 @@ struct ShadowOffset {
 
 // What colour each shade of a glyph is drawn in (shade 0 is never drawn,
 // nor a shade without a colour),
-// and the colour of the shadow, if there is one. The shadow is drawn first,
-// at each of `shadowAt` from every drawn pixel; the glyphs go over it.
+// and the colour of the shadow, if there is one. The shadow is drawn first:
+// the whole text at the first of `shadowAt`, then at the next, and so on;
+// the glyphs go over it. A shade with a colour in `shadowShades` casts its
+// shadow in that colour instead.
 struct TextStyle {
     std::array<std::optional<std::uint8_t>, 16> shades{};
     std::optional<std::uint8_t> shadow;
+    std::array<std::optional<std::uint8_t>, 16> shadowShades{};
     std::vector<ShadowOffset> shadowAt{{1, 1}};
     int spacing = 1; // pixels between two characters
 };

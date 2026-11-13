@@ -22,6 +22,7 @@ add_library(hgm_core STATIC
     src/config/parameters.cpp
     src/rules/random.cpp
     src/rules/galaxy_generator.cpp
+    src/rules/empire.cpp
     src/data/json.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)

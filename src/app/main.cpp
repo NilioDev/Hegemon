@@ -17,6 +17,7 @@
 #include "hegemon/ui/main_menu.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
+#include "hegemon/rules/empire.hpp"
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
@@ -55,7 +56,7 @@ struct App {
     std::unique_ptr<hegemon::GeneratingScreen> generating; // after the banner
     std::size_t banner = 0;                                // the banner colour taken
     bool shownGenerating = false; // the message is on the screen: make the galaxy
-    std::unique_ptr<hegemon::Galaxy> galaxy;
+    std::unique_ptr<hegemon::Game> game;
     std::unique_ptr<hegemon::GalaxyMap> map;
     std::unique_ptr<hegemon::NameBox> homeName; // over the map at first
     std::mt19937 random{std::random_device{}()};
@@ -343,7 +344,7 @@ void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
     app.map.reset();
-    app.galaxy.reset();
+    app.game.reset();
     app.generating.reset();
     app.banners.reset();
     app.rulerName.reset();
@@ -391,9 +392,17 @@ void makeGalaxy(App& app) {
         const hegemon::GalaxyGenerator generator(app.data->parameters(), hegemon::StarNames::load(*app.data),
                                                  hegemon::loadNebulae(*app.data));
         hegemon::Random random(app.random());
-        app.galaxy = std::make_unique<hegemon::Galaxy>(generator.generate(settings, random));
-        app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, *app.galaxy, banners);
-        const auto& home = app.galaxy->stars.at(static_cast<std::size_t>(app.galaxy->homes.at(0).star));
+        std::vector<hegemon::RacePicks> picks;
+        for (const auto& p : settings.players) {
+            picks.push_back(p.picks);
+        }
+        app.game = std::make_unique<hegemon::Game>(
+            hegemon::startGame(app.data->parameters(), generator.generate(settings, random), picks, banners));
+        const hegemon::Galaxy& galaxy = app.game->galaxy;
+        app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, galaxy, banners);
+        app.map->setPanel(app.game->stardate, hegemon::Economy(app.data->parameters()).summary(*app.game, 0));
+        app.map->setFleets({galaxy.homes.at(0).star});
+        const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
         app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
         app.generating.reset();
         app.banners.reset();
@@ -419,7 +428,7 @@ SDL_AppResult generatingEvent(App& app, SDL_Event* event) {
 }
 
 void acceptHomeName(App& app) {
-    auto& home = app.galaxy->stars.at(static_cast<std::size_t>(app.galaxy->homes.at(0).star));
+    auto& home = app.game->galaxy.stars.at(static_cast<std::size_t>(app.game->galaxy.homes.at(0).star));
     if (!app.homeName->name().empty()) {
         home.name = app.homeName->name();
     }

@@ -15,6 +15,7 @@ add_executable(hgm_tests
     test_credits.cpp
     test_config.cpp
     test_galaxy.cpp
+    test_empire.cpp
 )
 target_link_libraries(hgm_tests PRIVATE hegemon::core)
 target_compile_definitions(hgm_tests PRIVATE HEGEMON_GAMEDATA_DIR="${PROJECT_SOURCE_DIR}/gamedata")

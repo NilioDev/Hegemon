@@ -107,9 +107,12 @@ int Font::draw(Canvas& canvas, int x, int y, std::string_view text, const TextSt
         }
         return cx;
     };
-    if (style.shadow) {
-        each([&](int px, int py, std::uint8_t) {
-            for (const auto& o : style.shadowAt) {
+    // The whole text at one offset, then at the next.
+    for (const auto& o : style.shadowAt) {
+        each([&](int px, int py, std::uint8_t shade) {
+            if (shade < style.shadowShades.size() && style.shadowShades[shade]) {
+                put(px + o.dx, py + o.dy, *style.shadowShades[shade]);
+            } else if (style.shadow) {
                 put(px + o.dx, py + o.dy, *style.shadow);
             }
         });

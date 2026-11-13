@@ -75,6 +75,50 @@ HGM_TEST("Galaxy map: where the stars are drawn, and the frame around them") {
     HGM_CHECK(left == 60 && right == 82);
 }
 
+HGM_TEST("Galaxy map: the side panel and the fleet at the home star") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(game);
+    const Galaxy g = medium();
+    GalaxyMap map(data, g, {0});
+    Canvas before(640, 480, 99);
+    Palette palette;
+    map.draw(before, palette);
+    EmpireSummary s;
+    s.money = 50;
+    s.income = 7;
+    s.commandPoints = 6;
+    s.commandUsed = 3;
+    map.setPanel(35000, s);
+    map.setFleets({1});
+    Canvas after(640, 480, 99);
+    map.draw(after, palette);
+    const auto count = [&](int x0, int y0, int x1, int y1, std::uint8_t colour) {
+        int n = 0;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                n += after.at(x, y) == colour && before.at(x, y) != colour ? 1 : 0;
+            }
+        }
+        return n;
+    };
+    // The texts in light grey: the stardate, "50 BC", "+7 BC", "none".
+    HGM_CHECK(count(555, 29, 605, 41, 23) > 30);
+    HGM_CHECK(count(555, 96, 605, 120, 23) > 60);
+    HGM_CHECK(count(555, 403, 605, 415, 23) > 30);
+    // The red fleet marker at the upper right of the size 1 star at (71,
+    // 109): its 12 × 10 picture from (78, 96).
+    int changed = 0;
+    for (int y = 96; y < 106; ++y) {
+        for (int x = 78; x < 90; ++x) {
+            changed += after.at(x, y) != before.at(x, y) ? 1 : 0;
+        }
+    }
+    HGM_CHECK(changed > 30);
+}
+
 HGM_TEST("Galaxy map: the Enter Home Star Name box") {
     const fs::path game = HEGEMON_GAMEDATA_DIR;
     if (!isGameFolder(game)) {

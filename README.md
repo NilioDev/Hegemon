@@ -18,7 +18,9 @@ gamepad, mouse, keyboard and touch controls.
 > other settings, and Accept leads to choosing your race, entering your
 > ruler's name and choosing your banner colour. Hegemon then makes a new
 > galaxy the way the fan patch does and shows it on the galaxy map, where you
-> name your home star. Playing the game itself comes next; until then Esc on
+> name your home star. Every empire starts with its home colony, ships and
+> money as in the original, and the side panel shows the stardate, your
+> treasury and income, command points, food and freighters. Playing the game itself comes next; until then Esc on
 > the galaxy map goes back to the main menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
 > light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,
