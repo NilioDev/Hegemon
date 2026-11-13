@@ -3,7 +3,7 @@
 // The Hegemon app: opens a window, turns mouse, keyboard and gamepad input
 // into commands for the current screen, and shows the 640×480 picture the
 // core draws, scaled sharply to the window. For now the screens are the
-// main menu and the New Game screen.
+// main menu, the New Game screen and the race selection.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -15,6 +15,7 @@
 #include "hegemon/ui/main_menu.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
+#include "hegemon/ui/race_select.hpp"
 #include "hegemon/version.hpp"
 
 #include <filesystem>
@@ -37,6 +38,8 @@ struct App {
     std::unique_ptr<hegemon::MainMenu> menu;
     std::unique_ptr<hegemon::Pointer> pointer;
     std::unique_ptr<hegemon::NewGameScreen> newGame; // while it is shown
+    std::unique_ptr<hegemon::Races> races;
+    std::unique_ptr<hegemon::RaceSelectScreen> raceSelect; // while it is shown
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
     hegemon::Palette palette;
@@ -67,6 +70,16 @@ std::optional<std::filesystem::path> findGameFolder() {
     return std::nullopt;
 }
 
+// Opens the New Game screen with the settings chosen last.
+void openNewGame(App& app) {
+    try {
+        app.newGame = std::make_unique<hegemon::NewGameScreen>(*app.data, app.settings);
+        app.pointer->useEntry(hegemon::NewGameScreen::kPointerEntry);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The New Game screen could not be read: %s", e.what());
+    }
+}
+
 // What a choice in the main menu does.
 SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
     using Choice = hegemon::MainMenu::Choice;
@@ -74,12 +87,7 @@ SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
         return SDL_APP_SUCCESS;
     }
     if (choice == Choice::NewGame) {
-        try {
-            app.newGame = std::make_unique<hegemon::NewGameScreen>(*app.data, app.settings);
-            app.pointer->useEntry(hegemon::NewGameScreen::kPointerEntry);
-        } catch (const hegemon::FormatError& e) {
-            SDL_Log("The New Game screen could not be read: %s", e.what());
-        }
+        openNewGame(app);
         return SDL_APP_CONTINUE;
     }
     SDL_Log("This part of the game is not there yet.");
@@ -90,7 +98,18 @@ SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
 void finishNewGame(App& app, hegemon::NewGameScreen::Result result) {
     if (result == hegemon::NewGameScreen::Result::Accept) {
         app.settings = app.newGame->settings();
-        SDL_Log("Choosing a race is not there yet.");
+        try {
+            if (!app.races) {
+                app.races = std::make_unique<hegemon::Races>(*app.data);
+            }
+            app.raceSelect =
+                std::make_unique<hegemon::RaceSelectScreen>(*app.data, *app.races, app.pointer->x(), app.pointer->y());
+            app.pointer->useEntry(hegemon::RaceSelectScreen::kPointerEntry);
+            app.newGame.reset();
+            return;
+        } catch (const hegemon::FormatError& e) {
+            SDL_Log("The race selection could not be read: %s", e.what());
+        }
     }
     app.newGame.reset();
     app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
@@ -244,6 +263,91 @@ SDL_AppResult newGameEvent(App& app, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
+// What choosing a race leads to.
+void chooseRace(App& app, std::size_t button) {
+    (void)app;
+    if (button == hegemon::RaceSelectScreen::kCustom) {
+        SDL_Log("Designing a custom race is not there yet.");
+    } else {
+        SDL_Log("Entering the ruler's name is not there yet.");
+    }
+}
+
+// Back from the race selection to the New Game screen.
+void leaveRaceSelect(App& app) {
+    app.raceSelect.reset();
+    openNewGame(app);
+}
+
+SDL_AppResult raceSelectEvent(App& app, SDL_Event* event) {
+    auto& screen = *app.raceSelect;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        screen.pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            screen.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto race = screen.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                chooseRace(app, *race);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE) {
+            leaveRaceSelect(app);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            if (const auto race = screen.click(app.pointer->x(), app.pointer->y())) {
+                chooseRace(app, *race);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        app.pointer->hide();
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+            screen.moveHighlight(-1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            screen.moveHighlight(1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            screen.moveHighlight(-7);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            screen.moveHighlight(7);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            chooseRace(app, screen.highlighted());
+            break;
+        case SDL_GAMEPAD_BUTTON_EAST:
+            leaveRaceSelect(app);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        if (event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
+            const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
+            if (direction != 0 && direction != app.stickDirection) {
+                app.pointer->hide();
+                screen.moveHighlight(direction);
+            }
+            app.stickDirection = direction;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
 SDL_AppResult menuEvent(App& app, SDL_Event* event) {
     auto& menu = *app.menu;
     switch (event->type) {
@@ -348,6 +452,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     default:
         break;
     }
+    if (app->raceSelect) {
+        return raceSelectEvent(*app, event);
+    }
     return app->newGame ? newGameEvent(*app, event) : menuEvent(*app, event);
 }
 
@@ -359,7 +466,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->newGame) {
+        if (app->raceSelect) {
+            app->raceSelect->draw(app->canvas, app->palette);
+        } else if (app->newGame) {
             app->newGame->draw(app->canvas, app->palette);
         } else {
             app->menu->tick(elapsed);

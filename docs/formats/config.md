@@ -75,3 +75,11 @@ own `150\USER.CFG` last.
 
 To keep damaged files from running away, Hegemon reads files of at most
 1 MiB, at most 1,024 files, and includes at most 16 deep.
+
+## Settings Hegemon uses so far
+
+| Setting | Where |
+| --- | --- |
+| `<name>.lbx = <path>` | Which file replaces an LBX archive |
+| `format version`, `format mod_name` | [../rules/main-menu.md](../rules/main-menu.md) |
+| `stock_race` | [races.md](races.md) |
