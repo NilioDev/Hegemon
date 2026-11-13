@@ -1,0 +1,14 @@
+configure_file(version.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/hegemon/version.hpp" @ONLY)
+
+add_library(hgm_core STATIC
+    src/game_files.cpp
+    src/data/lbx.cpp
+)
+add_library(hegemon::core ALIAS hgm_core)
+
+target_include_directories(hgm_core PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_compile_features(hgm_core PUBLIC cxx_std_20)
+set_target_properties(hgm_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+hgm_set_warnings(hgm_core)
