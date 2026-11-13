@@ -52,9 +52,13 @@ All of the following was measured; the tables say nothing about it.
 The colour of a star other than Orion and the home stars is picked with
 the weights in `star_class_chance` for the galaxy's age: blue, white,
 yellow, orange, red, brown or black hole. Average age gives about 10 % blue,
-16 % white, 16 % yellow, 17 % orange, 37 % red, 1 % brown and 2 % black
-holes; measured black holes are fewer than the table's 4 % because the
-fan patch turns black holes in nebulae into ordinary stars.
+16 % white, 16 % yellow, 17 % orange, 37 % red, 1 % brown and 4 % black
+holes. Black holes are rarer in the original, though, measured:
+
+- none in a nebula (fan patch 1.51 rolls such a star again from the table);
+- none within 100 of a home star;
+- elsewhere about 2.4 in 100 stars, not 4: Hegemon keeps 60 % of the
+  table's weight for black holes.
 
 Measured, home stars are 41 % red, 22 % orange, 18 % yellow, 15 % white,
 3 % brown and 1 % blue, never black holes. Orion is blue, white, yellow,
@@ -176,7 +180,28 @@ gaia; gravity stays as it was). Hegemon makes each planet rich or ultra
 rich with a chance of 65 in 100, large or huge with 50 and terran or gaia
 with 30.
 
+## Nebulae
+
+`STARBG.LBX` holds twelve nebulae, each at four scales (entries 6 to 53:
+6, 10, ... 50 at the galaxy map's own scale, then each smaller). A galaxy
+has (measured, in percent):
+
+| Size | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| Small | 65 | 35 | | | |
+| Medium | | 23 | 77 | | |
+| Large | | 55 | 10 | 35 | |
+| Huge | | | 33 | 40 | 27 |
+| Cluster | | | 33 | 27 | 40 |
+
+Each takes one of the twelve pictures at random and lies with its top left
+corner anywhere that keeps the picture on the map; a cluster's nebulae lie
+within 759 × 600, as a medium galaxy's. No two nebulae have their corners
+closer than 270 across and at once down (218 in a cluster). A star is in a
+nebula where the picture's colour index at the star is above 5, as the fan
+patch 1.51 manual says; this matches 99 in 100 of the measured stars.
+
 ## Still to do
 
-Nebulae (and black holes in them), the Antarans, and the fan patch's map
-switches (`mapgen` table).
+The Antarans, the fan patch's map switches (`mapgen` table), the home
+systems' closest star and food world rules.

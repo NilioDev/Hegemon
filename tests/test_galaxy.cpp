@@ -271,6 +271,49 @@ HGM_TEST("Galaxy: special finds, wormholes and monsters") {
     HGM_CHECK(finds > 0);
 }
 
+HGM_TEST("Galaxy: nebulae, stars in them, no black holes there") {
+    std::string list = kList;
+    // Black holes only, so every star outside a nebula is one.
+    const std::string red = R"([[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [1, 1, 1], [0, 0, 0], [0, 0, 0]])";
+    list.replace(list.find(red), red.size(), R"([[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [1, 1, 1], [0, 0, 0], [1000, 1000, 1000]])");
+    const Parameters p = Parameters::defaults(list);
+    // Twelve square nebulae, bright inside a dark rim.
+    std::vector<Canvas> pictures;
+    for (int i = 0; i < 12; ++i) {
+        Canvas c(150, 140, 0);
+        for (int y = 10; y < 130; ++y) {
+            for (int x = 10; x < 140; ++x) {
+                c.set(x, y, 20);
+            }
+        }
+        pictures.push_back(c);
+    }
+    const GalaxyGenerator gen(p, testNames(), pictures);
+    Random r(3);
+    auto s = settings(3);
+    s.size = NewGameSettings::GalaxySize::Huge;
+    int inside = 0;
+    for (int round = 0; round < 10; ++round) {
+        const Galaxy g = gen.generate(s, r);
+        HGM_CHECK(g.nebulae.size() >= 2 && g.nebulae.size() <= 4);
+        for (const auto& b : g.nebulae) {
+            HGM_CHECK(b.picture >= 0 && b.picture < 12);
+            HGM_CHECK(b.x >= 0 && b.y >= 0 && b.x + 150 <= g.width && b.y + 140 <= g.height);
+        }
+        for (const Star& star : g.stars) {
+            const bool in = std::any_of(g.nebulae.begin(), g.nebulae.end(), [&](const Nebula& b) {
+                return star.x >= b.x + 10 && star.x < b.x + 140 && star.y >= b.y + 10 && star.y < b.y + 130;
+            });
+            HGM_CHECK(star.inNebula == in);
+            if (in) {
+                ++inside;
+                HGM_CHECK(star.colour != StarColour::BlackHole);
+            }
+        }
+    }
+    HGM_CHECK(inside > 0);
+}
+
 HGM_TEST("Galaxy: too many players for the stars") {
     const Parameters p = Parameters::defaults(kList);
     const GalaxyGenerator gen(p, testNames());
@@ -293,7 +336,7 @@ HGM_TEST("Galaxy: the fan patch's tables make galaxies like the original's") {
     }
     GameData data(game);
     const Races races(data);
-    const GalaxyGenerator gen(data.parameters(), StarNames::load(data));
+    const GalaxyGenerator gen(data.parameters(), StarNames::load(data), loadNebulae(data));
     GalaxySettings s;
     for (int i = 0; i < 5; ++i) {
         s.players.push_back({i, races.stock(static_cast<std::size_t>(i))});

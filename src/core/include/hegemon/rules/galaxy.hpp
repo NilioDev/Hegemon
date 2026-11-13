@@ -74,6 +74,12 @@ struct Monster {
     int star = 0;
 };
 
+// A nebula: one of the twelve pictures, its top left corner on the map.
+struct Nebula {
+    int picture = 0;
+    int x = 0, y = 0;
+};
+
 // Where a player starts.
 struct HomeSystem {
     int race = 0; // one of the stock races
@@ -88,6 +94,7 @@ struct Galaxy {
     std::vector<Planet> planets;
     std::vector<HomeSystem> homes; // one per player, the human first
     std::vector<Monster> monsters;
+    std::vector<Nebula> nebulae;
 };
 
 } // namespace hegemon
