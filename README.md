@@ -42,8 +42,11 @@ and download the one for your system at the bottom of the page.
 
 Copy the folder of your installed game (the one with the `.LBX` files) into a
 folder named `gamedata` next to the program, or start it with the folder:
-`./Hegemon path/to/game`. Hegemon then shows the main menu from your files.
-Without game files it says where to put them.
+`./Hegemon path/to/game`. Install the fan patch 1.51 from
+[moo2mod.com](https://moo2mod.com/) in that folder: Hegemon plays the game as
+the patched version does and reads its settings and mods. Hegemon then shows
+the main menu from your files. Without game files or the fan patch it says
+what is missing.
 
 ## Controls
 

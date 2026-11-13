@@ -177,6 +177,9 @@ HGM_TEST("Image: the original's pictures") {
     std::size_t pictures = 0;
     std::size_t raw = 0;
     for (const auto& file : std::filesystem::directory_iterator(folder)) {
+        if (!file.is_regular_file()) {
+            continue; // such as the fan patch's folder
+        }
         auto bytes = readFile(file.path());
         if (!hegemon::LbxArchive::looksLikeLbx(bytes)) {
             continue;

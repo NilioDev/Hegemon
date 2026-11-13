@@ -6,6 +6,7 @@ add_executable(hgm_tests
     test_main_menu.cpp
     test_font.cpp
     test_credits.cpp
+    test_config.cpp
 )
 target_link_libraries(hgm_tests PRIVATE hegemon::core)
 target_compile_definitions(hgm_tests PRIVATE HEGEMON_GAMEDATA_DIR="${PROJECT_SOURCE_DIR}/gamedata")

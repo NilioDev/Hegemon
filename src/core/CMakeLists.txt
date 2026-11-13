@@ -9,6 +9,7 @@ add_library(hgm_core STATIC
     src/data/font.cpp
     src/data/text_table.cpp
     src/ui/credits.cpp
+    src/config/fan_patch_config.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)
 

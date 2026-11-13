@@ -10,7 +10,7 @@ under DOSBox, by comparing captures of its screen with pictures from
 2. Entry 2 on top of it: the panel on the right, with all six buttons in
    their normal look. Its own 256 colours replace those of entry 1 (they are
    the same for the parts that show).
-3. The credits and the version text, see below.
+3. The credits, the mod name and the version text, see below.
 4. Each button in its current look, at x = 415 and, from the top, y = 172,
    195, 217, 240, 262 and 285.
 
@@ -63,11 +63,25 @@ all of them match pixel for pixel, apart from frames that the capture took
 while the original was still drawing them, where a few lines show a colour
 from one step earlier.
 
-## The version text
+## The version text and the mod name
 
-`Version 1.51` in font 1 of `FONTS.LBX`, with its top left corner at (492,
-433). Shade 1 is drawn in colour 208, shade 2 in 215; there is no shadow.
-The unpatched 1.31 shows `Version 1.31` in the same place.
+Two texts placed by the fan patch's `format version` and `format mod_name`
+settings (see [../formats/config.md](../formats/config.md)): a template, a
+font (0 to 5 of `FONTS.LBX`), an alignment (`l`, `r` or `c`) and x and y.
+Each can also be set alone, as in `format version y = 420;`. In the
+template `$VERSION$` stands for `1.51` and `$MOD$` for the name of the first
+mod loaded. Without such settings the fan patch uses
+`"Version: $VERSION$" 2 r 590 415` and `"Config: $MOD$" 2 r 590 400`; an
+empty template draws nothing.
+
+The text's top is at y. Right-aligned, its last pixel column is x − 1: the
+standard mod's `"Version $VERSION$" 1 r 541 433` starts `Version 1.51` at
+x = 492. Centred texts are placed at x minus half their width; that has not
+been measured. Shade 1 is drawn in colour 208, shade 2 in 215, with no
+shadow (measured in font 1).
+
+The unpatched 1.31 shows `Version 1.31` in the same place as the standard
+mod.
 
 ## Which buttons can be used
 

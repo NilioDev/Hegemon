@@ -112,18 +112,22 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
 }
 
-HGM_TEST("Main menu: the version text at the bottom right") {
+HGM_TEST("Main menu: version and mod name where the fan patch's settings put them") {
     const fs::path game = HEGEMON_GAMEDATA_DIR;
     if (!hegemon::isGameFolder(game)) {
         HGM_SKIP("original game files not in gamedata/");
     }
-    hegemon::GameData data(menuFolder(game, {}));
+    const fs::path folder = menuFolder(game, {});
+    std::ofstream(folder / "ORION2.CFG") << "format version = \"Version $VERSION$\" 1 r 541 433;\n"
+                                         << "format mod_name = \"\" 1 r 541 419;\n";
+    hegemon::GameData data(folder);
     const hegemon::MainMenu menu(data);
+    HGM_CHECK(menu.versionLabel().text == "Version 1.51");
+    HGM_CHECK(menu.modNameLabel().text.empty());
     hegemon::Canvas canvas(640, 480);
     hegemon::Palette palette;
     menu.draw(canvas, palette);
-    // The V's two top corners, in shade 2; the rest of its first row is the
-    // background.
+    // Right-aligned on x = 541: the V's two top corners, in shade 2.
     HGM_CHECK(canvas.at(492, 433) == 215);
     HGM_CHECK(canvas.at(496, 433) == 215);
     int lit = 0;
@@ -133,5 +137,23 @@ HGM_TEST("Main menu: the version text at the bottom right") {
         }
     }
     HGM_CHECK(lit > 50);
-    fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
+    fs::remove_all(folder);
+}
+
+HGM_TEST("Main menu: the fan patch's defaults when its settings don't say") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!hegemon::isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    const fs::path folder = menuFolder(game, {});
+    std::ofstream(folder / "ORION2.CFG") << "format version y = 420;\n";
+    hegemon::GameData data(folder);
+    const hegemon::MainMenu menu(data);
+    HGM_CHECK(menu.versionLabel().text == "Version: 1.51");
+    HGM_CHECK(menu.versionLabel().font == 2);
+    HGM_CHECK(menu.versionLabel().align == 'r');
+    HGM_CHECK(menu.versionLabel().x == 590);
+    HGM_CHECK(menu.versionLabel().y == 420);
+    HGM_CHECK(menu.modNameLabel().text == "Config: ");
+    fs::remove_all(folder);
 }
