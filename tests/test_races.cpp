@@ -54,7 +54,7 @@ std::vector<std::uint8_t> table() {
     std::vector<std::uint8_t> out = {13, 0, 31, 0};
     for (int r = 0; r < 13; ++r) {
         for (int p = 0; p < 31; ++p) {
-            out.push_back(p == 0 ? 2 : 0);
+            out.push_back(static_cast<std::uint8_t>(p == 0 ? 2 : 0));
         }
     }
     out[4 + 1] = 1;  // race 0: growth -50

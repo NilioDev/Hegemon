@@ -130,7 +130,7 @@ void RaceSelectScreen::draw(Canvas& canvas, Palette& palette) const {
     TextStyle style;
     style.shades[1] = kTextShade1;
     style.shades[2] = kTextShade2;
-    style.shadow = 0;
+    style.shadow = std::uint8_t{0};
     style.shadowAt = {{1, 0}, {0, 1}, {1, 1}};
     style.spacing = kTextSpacing;
     const Font& font = fonts_.font(kTextFont);
