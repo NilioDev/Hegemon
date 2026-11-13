@@ -63,6 +63,14 @@ constexpr std::array<std::int64_t, kStarColours> kHomeColour = {1, 15, 18, 22, 4
 // asteroid belt half of the time.
 constexpr std::array<std::int64_t, kOrbits> kOrionOrbit = {0, 0, 8, 20, 12};
 constexpr int kOrionBeltPercent = 50;
+// STARBG.LBX: twelve nebulae, each at four scales, the galaxy map's first.
+constexpr std::size_t kFirstNebula = 6;
+constexpr std::size_t kNebulaPictures = 12;
+// A star is in a nebula where its picture's colour index is above this.
+constexpr std::uint8_t kNebulaLight = 5;
+// How many in a hundred of the table's black holes stay black holes
+// (measured).
+constexpr std::int64_t kBlackHoleKept = 60;
 // The chance that a system with a special find is guarded (measured).
 constexpr int kGuardPercent = 24;
 // Which monster guards a system, by its special find (measured counts for
@@ -101,20 +109,24 @@ public:
         double homesApart;
         double wormholeApart; // the ends of a wormhole at least
         int monsters;         // guarded systems at most
+        std::array<std::int64_t, 5> nebulae; // percent for 0 to 4 nebulae
+        int nebulaApart;      // corners at least this far across or down
+        int nebulaW, nebulaH; // the area nebulae lie in (0: the map's)
     };
     static constexpr std::array<Layout, 5> kLayout = {{
-        {24, 23, 18, 26, 57, 50, 129.0, 125.0, 1},
-        {31, 31, 38, 38, 60, 74, 290.0, 120.0, 3},
-        {42, 42, 43, 47, 75, 71, 430.0, 150.0, 5},
-        {63, 66, 54, 64, 90, 88, 651.0, 210.0, 7},
-        {31, 33, 28, 39, 60, 74, 430.0, 190.0, 7}, // cluster
+        {24, 23, 18, 26, 57, 50, 129.0, 125.0, 1, {65, 35, 0, 0, 0}, 270, 0, 0},
+        {31, 31, 38, 38, 60, 74, 290.0, 120.0, 3, {0, 23, 77, 0, 0}, 270, 0, 0},
+        {42, 42, 43, 47, 75, 71, 430.0, 150.0, 5, {0, 55, 10, 35, 0}, 270, 0, 0},
+        {63, 66, 54, 64, 90, 88, 651.0, 210.0, 7, {0, 0, 33, 40, 27}, 270, 0, 0},
+        {31, 33, 28, 39, 60, 74, 430.0, 190.0, 7, {0, 0, 33, 27, 40}, 218, 759, 600}, // cluster
     }};
     // How often Orion is the nearest star to the middle of the home stars,
     // the second nearest and so on (measured).
     static constexpr std::array<std::int64_t, 10> kOrionRank = {5, 7, 7, 6, 5, 3, 3, 2, 1, 1};
 
-    Maker(const Parameters& p, const StarNames& names, const GalaxySettings& s, Random& r)
-        : p_(p), names_(names), s_(s), r_(r) {
+    Maker(const Parameters& p, const StarNames& names, const std::vector<Canvas>& nebulae, const GalaxySettings& s,
+          Random& r)
+        : p_(p), names_(names), nebulaPictures_(nebulae), s_(s), r_(r) {
         using Size = NewGameSettings::GalaxySize;
         switch (s.size) {
         case Size::Small:
@@ -163,6 +175,7 @@ public:
             g_.homes.clear();
             if (place(count) && chooseHomes(apart)) {
                 chooseOrion();
+                placeNebulae();
                 fill();
                 specials();
                 monsters();
@@ -295,10 +308,62 @@ private:
         }
     }
 
-    StarColour rollColour() {
+    // Nebulae: how many by the galaxy's size, pictures at random, apart
+    // from each other (measured). Then which stars lie in one.
+    void placeNebulae() {
+        g_.nebulae.clear();
+        if (nebulaPictures_.empty()) {
+            return;
+        }
+        const Layout& l = kLayout[layout_];
+        const int areaW = l.nebulaW > 0 ? l.nebulaW : g_.width;
+        const int areaH = l.nebulaH > 0 ? l.nebulaH : g_.height;
+        const auto count = r_.pick(l.nebulae).value_or(0);
+        for (std::size_t n = 0; n < count; ++n) {
+            for (int tries = 0; tries < 200; ++tries) {
+                Nebula b;
+                b.picture = static_cast<int>(r_.below(static_cast<std::uint32_t>(nebulaPictures_.size())));
+                const Canvas& c = nebulaPictures_[static_cast<std::size_t>(b.picture)];
+                if (c.width() > areaW || c.height() > areaH) {
+                    break;
+                }
+                b.x = r_.between(0, areaW - c.width());
+                b.y = r_.between(0, areaH - c.height());
+                if (std::all_of(g_.nebulae.begin(), g_.nebulae.end(), [&](const Nebula& o) {
+                        return std::abs(o.x - b.x) >= l.nebulaApart || std::abs(o.y - b.y) >= l.nebulaApart;
+                    })) {
+                    g_.nebulae.push_back(b);
+                    break;
+                }
+            }
+        }
+        for (auto& s : g_.stars) {
+            s.inNebula = std::any_of(g_.nebulae.begin(), g_.nebulae.end(), [&](const Nebula& b) {
+                const Canvas& c = nebulaPictures_[static_cast<std::size_t>(b.picture)];
+                const int px = s.x - b.x, py = s.y - b.y;
+                return px >= 0 && py >= 0 && px < c.width() && py < c.height() && c.at(px, py) > kNebulaLight;
+            });
+        }
+    }
+
+    // A star's colour; no black holes in nebulae (fan patch 1.51 rolls
+    // such a star again from the table).
+    StarColour rollColour(bool inNebula, bool nearHome) {
         std::array<std::int64_t, kStarColours> w{};
         for (std::size_t c = 0; c < kStarColours; ++c) {
             w[c] = cell("star_class_chance", kColourNames[c], kAgeNames[age_]);
+        }
+        if (inNebula) {
+            w[static_cast<std::size_t>(StarColour::BlackHole)] = 0;
+        }
+        // Measured: black holes are rarer than the table says (about 2.4 in
+        // 100 stars, not 4, away from home stars too), and none lies within
+        // 100 of a home star.
+        if (nearHome) {
+            w[static_cast<std::size_t>(StarColour::BlackHole)] = 0;
+        } else {
+            w[static_cast<std::size_t>(StarColour::BlackHole)] =
+                w[static_cast<std::size_t>(StarColour::BlackHole)] * kBlackHoleKept / 100;
         }
         return static_cast<StarColour>(r_.pick(w).value_or(static_cast<std::size_t>(StarColour::Red)));
     }
@@ -441,7 +506,7 @@ private:
                 return h.star == i;
             });
             Star& s = g_.stars[static_cast<std::size_t>(i)];
-            s.colour = home ? static_cast<StarColour>(r_.pick(kHomeColour).value_or(4)) : rollColour();
+            s.colour = home ? static_cast<StarColour>(r_.pick(kHomeColour).value_or(4)) : rollColour(s.inNebula, nearHome(i));
             if (home) {
                 makeHome(i);
             } else {
@@ -502,6 +567,11 @@ private:
         }
     }
 
+
+    bool nearHome(int star) const {
+        return std::any_of(g_.homes.begin(), g_.homes.end(),
+                           [&](const HomeSystem& h) { return h.star != star && distance(star, h.star) < 100.0; });
+    }
 
     bool isHome(int star) const {
         return std::any_of(g_.homes.begin(), g_.homes.end(), [&](const HomeSystem& h) { return h.star == star; });
@@ -673,6 +743,7 @@ private:
 
     const Parameters& p_;
     const StarNames& names_;
+    const std::vector<Canvas>& nebulaPictures_;
     const GalaxySettings& s_;
     Random& r_;
     std::size_t map_ = 1;    // the row of map_generation
@@ -684,11 +755,23 @@ private:
 
 } // namespace
 
-GalaxyGenerator::GalaxyGenerator(const Parameters& parameters, StarNames names)
-    : p_(parameters), names_(std::move(names)) {}
+std::vector<Canvas> loadNebulae(GameData& data) {
+    const LbxArchive& lbx = data.archive("STARBG.LBX");
+    std::vector<Canvas> out;
+    for (std::size_t i = 0; i < kNebulaPictures; ++i) {
+        const Image image = Image::parse(lbx.entry(kFirstNebula + 4 * i));
+        Canvas c(image.width(), image.height(), 0);
+        image.draw(0, c, 0, 0);
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+GalaxyGenerator::GalaxyGenerator(const Parameters& parameters, StarNames names, std::vector<Canvas> nebulae)
+    : p_(parameters), names_(std::move(names)), nebulae_(std::move(nebulae)) {}
 
 Galaxy GalaxyGenerator::generate(const GalaxySettings& settings, Random& random) const {
-    return Maker(p_, names_, settings, random).make();
+    return Maker(p_, names_, nebulae_, settings, random).make();
 }
 
 } // namespace hegemon
