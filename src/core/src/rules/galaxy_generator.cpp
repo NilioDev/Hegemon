@@ -69,18 +69,19 @@ enum class Group { Bombarded, Hostile, LifeSupporting, Lifeless };
 class Maker {
 public:
     // Measured for the four map sizes of the fan patch's tables (small,
-    // medium, large, huge): where stars may lie, how close two may come and
+    // medium, large, huge) and for a cluster galaxy: where stars may lie, how close two may come and
     // how far apart home stars are.
     struct Layout {
         int left, top, right, bottom; // the margins
         int apartX, apartY;           // no two stars closer in both
         double homesApart;
     };
-    static constexpr std::array<Layout, 4> kLayout = {{
+    static constexpr std::array<Layout, 5> kLayout = {{
         {24, 23, 18, 26, 57, 50, 129.0},
-        {31, 31, 38, 38, 60, 72, 290.0},
+        {31, 31, 38, 38, 60, 74, 290.0},
         {42, 42, 43, 47, 75, 71, 430.0},
         {63, 66, 54, 64, 90, 88, 651.0},
+        {31, 33, 28, 39, 60, 74, 430.0}, // cluster
     }};
     // How often Orion is the nearest star to the middle of the home stars,
     // the second nearest and so on (measured).
@@ -99,10 +100,18 @@ public:
         case Size::Large:
             map_ = 2;
             break;
-        case Size::Cluster:
         case Size::Huge:
             map_ = 3;
             break;
+        case Size::Cluster: // a large map with as many stars as a huge one
+            map_ = 2;
+            stars_ = 3;
+            layout_ = 4;
+            break;
+        }
+        if (s.size != Size::Cluster) {
+            stars_ = map_;
+            layout_ = map_;
         }
         age_ = static_cast<std::size_t>(s.age);
     }
@@ -111,13 +120,14 @@ public:
         const std::string_view map = kMapSizeNames[map_];
         g_.width = static_cast<int>(p_.integer("map_generation", {map}, "width"));
         g_.height = static_cast<int>(p_.integer("map_generation", {map}, "height"));
-        const auto count = static_cast<std::size_t>(p_.integer("stars_in_galaxy", {}, map));
+        g_.cluster = s_.size == NewGameSettings::GalaxySize::Cluster;
+        const auto count = static_cast<std::size_t>(p_.integer("stars_in_galaxy", {}, kMapSizeNames[stars_]));
         if (count < s_.players.size() + 1) {
             throw std::runtime_error("galaxy: fewer stars than players");
         }
         // When the home stars can't be as far apart as usual (many players
         // in a small galaxy), they may come closer, a tenth at a time.
-        double apart = kLayout[map_].homesApart;
+        double apart = kLayout[layout_].homesApart;
         for (int attempt = 0; attempt < 200; ++attempt) {
             if (attempt > 0 && attempt % 10 == 0) {
                 apart *= 0.9;
@@ -143,7 +153,7 @@ private:
     // Stars at random where no other star is close in both directions, the
     // better of two places each time.
     bool place(std::size_t count) {
-        const Layout& l = kLayout[map_];
+        const Layout& l = kLayout[layout_];
         const int left = l.left, right = g_.width - l.right;
         const int top = l.top, bottom = g_.height - l.bottom;
         if (left > right || top > bottom) {
@@ -483,7 +493,9 @@ private:
     const StarNames& names_;
     const GalaxySettings& s_;
     Random& r_;
-    std::size_t map_ = 1;
+    std::size_t map_ = 1;    // the row of map_generation
+    std::size_t stars_ = 1;  // the column of stars_in_galaxy
+    std::size_t layout_ = 1; // of kLayout
     std::size_t age_ = 1;
     Galaxy g_;
 };
