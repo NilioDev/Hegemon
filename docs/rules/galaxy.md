@@ -20,17 +20,18 @@ marks what no table gives.
 
 `map_generation` gives the map's `width` and `height`
 for small, medium, large and huge; `stars_in_galaxy` the number of stars.
-Medium is 759 × 600 with 36 stars. A cluster galaxy is made as a huge one
-for now.
+Medium is 759 × 600 with 36 stars. A cluster galaxy has the map of a large
+one and the stars of a huge one, closer together (measured).
 
 All of the following was measured; the tables say nothing about it.
 
 | Size | Margins left, top, right, bottom | No two stars closer than, across and down | Home stars apart |
 |---|---|---|---|
 | Small | 24, 23, 18, 26 | 57 and 50 | 129 |
-| Medium | 31, 31, 38, 38 | 60 and 72 | 290 |
+| Medium | 31, 31, 38, 38 | 60 and 74 | 290 |
 | Large | 42, 42, 43, 47 | 75 and 71 | 430 |
 | Huge | 63, 66, 54, 64 | 90 and 88 | 651 |
+| Cluster | 31, 33, 28, 39 | 60 and 74 | 430 |
 
 - **Stars** lie inside the margins. No two are closer than the table's
   numbers across and, at the same time, down; a few pairs in the original
@@ -127,5 +128,5 @@ the list has names, and star i takes name i.
 ## Still to do
 
 Wormholes, nebulae, monsters, the special finds of star systems and
-planets (`star_special_chance`, `planet_special_chance`), the Antarans,
-cluster galaxies, and the fan patch's map switches (`mapgen` table).
+planets (`star_special_chance`, `planet_special_chance`), the Antarans
+and the fan patch's map switches (`mapgen` table).

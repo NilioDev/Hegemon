@@ -121,7 +121,7 @@ HGM_TEST("Galaxy: stars apart, homes apart, planets from the tables") {
             HGM_CHECK(a.x >= 0 && a.x < g.width && a.y >= 0 && a.y < g.height);
             for (std::size_t j = i + 1; j < g.stars.size(); ++j) {
                 const Star& b = g.stars[j];
-                HGM_CHECK(std::abs(a.x - b.x) >= 60 || std::abs(a.y - b.y) >= 72);
+                HGM_CHECK(std::abs(a.x - b.x) >= 60 || std::abs(a.y - b.y) >= 74);
             }
             for (std::size_t o = 0; o < kOrbits; ++o) {
                 if (a.orbits[o] != kNoPlanet) {
@@ -198,6 +198,18 @@ HGM_TEST("Galaxy: the same seed makes the same galaxy") {
         HGM_CHECK(x.stars[i].name == y.stars[i].name);
     }
     HGM_CHECK(x.planets.size() == y.planets.size());
+}
+
+HGM_TEST("Galaxy: a cluster has a large map and a huge galaxy's stars") {
+    const Parameters p = Parameters::defaults(kList);
+    const GalaxyGenerator gen(p, testNames());
+    Random r(5);
+    auto s = settings(5);
+    s.size = NewGameSettings::GalaxySize::Cluster;
+    const Galaxy g = gen.generate(s, r);
+    HGM_CHECK(g.cluster);
+    HGM_CHECK(g.width == 1012 && g.height == 800);
+    HGM_CHECK(g.stars.size() == 40);
 }
 
 HGM_TEST("Galaxy: too many players for the stars") {

@@ -74,6 +74,7 @@ struct HomeSystem {
 
 struct Galaxy {
     int width = 0, height = 0;
+    bool cluster = false;
     std::vector<Star> stars; // Orion first, unless it was left out
     std::vector<Planet> planets;
     std::vector<HomeSystem> homes; // one per player, the human first
