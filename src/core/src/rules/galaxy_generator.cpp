@@ -94,6 +94,12 @@ constexpr std::array<std::int64_t, 7> kLivelyClimate = {16, 18, 7, 12, 8, 25, 13
 // Home systems have at least this many planets (the fan patch's /planets
 // switch, whose default is 3).
 constexpr int kDefaultHomePlanets = 3;
+// Map units in a parsec: warp_interdictor_range says 8100 is 3 parsecs
+// squared, so 90 units are 3 parsecs.
+constexpr double kParsec = 30.0;
+// Every home system of a race that eats has a planet that grows food
+// within this many parsecs (the fan patch's manual, and measured).
+constexpr double kFoodWorldParsecs = 6.0;
 
 enum class Group { Bombarded, Hostile, LifeSupporting, Lifeless };
 
@@ -173,14 +179,18 @@ public:
             g_.stars.clear();
             g_.planets.clear();
             g_.homes.clear();
+            g_.monsters.clear();
+            g_.nebulae.clear();
             if (place(count) && chooseHomes(apart)) {
                 chooseOrion();
                 placeNebulae();
                 fill();
                 specials();
                 monsters();
-                name();
-                return std::move(g_);
+                if (foodWorlds()) {
+                    name();
+                    return std::move(g_);
+                }
             }
         }
         throw std::runtime_error("galaxy: no room for the stars and home systems");
@@ -405,6 +415,20 @@ private:
                  kOrbitNames[static_cast<std::size_t>(orbit)]),
             0, 3));
         p.climate = rollClimate(group);
+        return p;
+    }
+
+    // A satellite rolled for this orbit until it is a planet.
+    Planet rollPlanet(int star, int orbit) {
+        Planet p = rollSatellite(star, orbit);
+        for (int k = 0; k < 100 && p.type != SatelliteType::Planet; ++k) {
+            p = rollSatellite(star, orbit);
+        }
+        if (p.type != SatelliteType::Planet) { // the orbit never has planets
+            p.type = SatelliteType::Planet;
+            p.size = PlanetSize::Medium;
+            p.gravity = gravity(p.minerals, p.size);
+        }
         return p;
     }
 
@@ -717,6 +741,98 @@ private:
                 }
                 if (q.climate < Climate::Terran && r_.chance(30)) {
                     q.climate = r_.below(2) == 0 ? Climate::Terran : Climate::Gaia;
+                }
+            }
+        }
+    }
+
+    bool guarded(int star) const {
+        return std::any_of(g_.monsters.begin(), g_.monsters.end(), [&](const Monster& m) { return m.star == star; });
+    }
+
+    bool growsFood(const Planet& q) const {
+        return q.type == SatelliteType::Planet &&
+               p_.integer("food_farmer_base", {}, kClimateNames[static_cast<std::size_t>(q.climate)]) > 0;
+    }
+
+    // A home system of a race that eats (not Lithovore) has a planet that
+    // grows food within six parsecs, outside the home systems and the
+    // systems monsters guard. When it has none, a planet of a system in reach,
+    // picked at random, gets a climate that grows food; a system without
+    // planets gets one. False when no system is in reach.
+    bool foodWorlds() {
+        const double reach = kFoodWorldParsecs * kParsec;
+        for (std::size_t i = 0; i < g_.homes.size(); ++i) {
+            if (s_.players[i].picks[RacePicks::Lithovore] != 0) {
+                continue;
+            }
+            const int home = g_.homes[i].star;
+            std::vector<int> inReach;
+            bool fed = false;
+            for (int j = 1; j < static_cast<int>(g_.stars.size()) && !fed; ++j) {
+                const Star& t = g_.stars[static_cast<std::size_t>(j)];
+                if (isHome(j) || guarded(j) || t.colour == StarColour::BlackHole || distance(home, j) > reach) {
+                    continue;
+                }
+                inReach.push_back(j);
+                fed = std::any_of(t.orbits.begin(), t.orbits.end(), [&](int o) {
+                    return o != kNoPlanet && growsFood(g_.planets[static_cast<std::size_t>(o)]);
+                });
+            }
+            if (fed) {
+                continue;
+            }
+            if (inReach.empty()) {
+                return false;
+            }
+            feed(inReach[r_.below(static_cast<std::uint32_t>(inReach.size()))]);
+        }
+        return true;
+    }
+
+    void feed(int star) {
+        Star& s = g_.stars[static_cast<std::size_t>(star)];
+        std::vector<int> planets, others;
+        std::vector<std::size_t> empty;
+        for (std::size_t o = 0; o < kOrbits; ++o) {
+            if (s.orbits[o] == kNoPlanet) {
+                empty.push_back(o);
+            } else if (g_.planets[static_cast<std::size_t>(s.orbits[o])].type == SatelliteType::Planet) {
+                planets.push_back(s.orbits[o]);
+            } else {
+                others.push_back(s.orbits[o]);
+            }
+        }
+        int target = kNoPlanet;
+        if (!planets.empty()) {
+            target = planets[r_.below(static_cast<std::uint32_t>(planets.size()))];
+        } else if (!empty.empty()) {
+            const auto orbit = empty[r_.below(static_cast<std::uint32_t>(empty.size()))];
+            target = add(rollPlanet(star, static_cast<int>(orbit)));
+            s.orbits[orbit] = target;
+        } else {
+            target = others[r_.below(static_cast<std::uint32_t>(others.size()))];
+            Planet& old = g_.planets[static_cast<std::size_t>(target)];
+            Planet p = rollPlanet(star, old.orbit);
+            p.special = old.special;
+            old = p;
+        }
+        Planet& q = g_.planets[static_cast<std::size_t>(target)];
+        // The climate the orbit gives, rolled until it grows food.
+        const auto colour = std::min<std::size_t>(static_cast<std::size_t>(s.colour), 5);
+        const auto group = static_cast<std::size_t>(std::clamp<std::int64_t>(
+            cell("orbit_to_climate_group", kColourNames[colour], kOrbitNames[static_cast<std::size_t>(q.orbit)]), 0,
+            3));
+        for (int k = 0; k < 100 && !growsFood(q); ++k) {
+            q.climate = rollClimate(group);
+        }
+        if (!growsFood(q)) { // the orbit's climates grow none: the best
+            std::int64_t best = 0;
+            for (std::size_t c = 0; c < kClimates; ++c) {
+                const auto food = p_.integer("food_farmer_base", {}, kClimateNames[c]);
+                if (food > best) {
+                    best = food;
+                    q.climate = static_cast<Climate>(c);
                 }
             }
         }

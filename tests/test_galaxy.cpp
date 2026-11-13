@@ -52,6 +52,9 @@ constexpr const char* kList = R"({"patch_version": "test", "parameters": [
   "rows": [["toxic", "radiated", "barren", "desert", "tundra", "ocean", "swamp", "arid", "terran", "gaia"]],
   "default": [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]],
   "columns": [{"name": "bombarded"}, {"name": "hostile"}, {"name": "life_supporting"}, {"name": "lifeless"}]},
+ {"name": "food_farmer_base", "type": "table", "rows": [], "default": [0, 0, 0, 2, 2, 4, 4, 2, 4, 6],
+  "columns": [{"name": "toxic"}, {"name": "radiated"}, {"name": "barren"}, {"name": "desert"}, {"name": "tundra"},
+              {"name": "ocean"}, {"name": "swamp"}, {"name": "arid"}, {"name": "terran"}, {"name": "gaia"}]},
  {"name": "star_special_chance", "type": "integer", "min": 0, "max": 100, "default": 100},
  {"name": "planet_special_chance", "type": "table", "rows": [], "default": [0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0],
   "columns": [{"name": "no_special"}, {"name": "wormhole"}, {"name": "space_debris"}, {"name": "pirate_cache"},
@@ -217,6 +220,35 @@ HGM_TEST("Galaxy: a cluster has a large map and a huge galaxy's stars") {
     HGM_CHECK(g.stars.size() == 40);
 }
 
+HGM_TEST("Galaxy: a planet that grows food near each home of a race that eats") {
+    // Only gaia grows food, and no planet is gaia: each home but the
+    // Lithovores' gets one within six parsecs.
+    std::string list = kList;
+    const std::string food = "[0, 0, 0, 2, 2, 4, 4, 2, 4, 6]";
+    list.replace(list.find(food), food.size(), "[0, 0, 0, 0, 0, 0, 0, 0, 0, 6]");
+    const Parameters p = Parameters::defaults(list);
+    const GalaxyGenerator gen(p, testNames());
+    Random r(5);
+    auto s = settings(4);
+    s.players[3].picks.values[RacePicks::Lithovore] = 1;
+    for (int round = 0; round < 20; ++round) {
+        const Galaxy g = gen.generate(s, r);
+        for (std::size_t i = 0; i < 3; ++i) {
+            const Star& home = g.stars.at(static_cast<std::size_t>(g.homes[i].star));
+            const bool fed = std::any_of(g.planets.begin(), g.planets.end(), [&](const Planet& q) {
+                const Star& t = g.stars.at(static_cast<std::size_t>(q.star));
+                const bool otherHome = std::any_of(g.homes.begin(), g.homes.end(),
+                                                   [&](const HomeSystem& h) { return h.star == q.star; });
+                const bool guarded = std::any_of(g.monsters.begin(), g.monsters.end(),
+                                                 [&](const Monster& m) { return m.star == q.star; });
+                return q.type == SatelliteType::Planet && q.climate == Climate::Gaia && q.special != Special::Orion &&
+                       !otherHome && !guarded && std::hypot(t.x - home.x, t.y - home.y) <= 180.0;
+            });
+            HGM_CHECK(fed);
+        }
+    }
+}
+
 HGM_TEST("Galaxy: special finds, wormholes and monsters") {
     std::string list = kList;
     const std::string never = R"("max": 100, "default": 100})";
@@ -292,6 +324,9 @@ HGM_TEST("Galaxy: nebulae, stars in them, no black holes there") {
     Random r(3);
     auto s = settings(3);
     s.size = NewGameSettings::GalaxySize::Huge;
+    for (auto& player : s.players) { // black holes grow no food
+        player.picks.values[RacePicks::Lithovore] = 1;
+    }
     int inside = 0;
     for (int round = 0; round < 10; ++round) {
         const Galaxy g = gen.generate(s, r);

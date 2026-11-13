@@ -118,6 +118,30 @@ those planets, any of them, becomes the home world:
 No other planet of a home system is terran (measured): Hegemon rolls such
 a planet's climate again.
 
+### A food world nearby
+
+The fan patch's manual says that every race that eats (all but the
+Lithovores) has a planet that grows food within 6 parsecs of its home
+star, outside the home systems and the systems monsters guard. A parsec is
+30 map units: `warp_interdictor_range` says 8100, three parsecs squared, is
+90 units squared. The measured galaxies agree: in medium, large, huge and
+cluster galaxies no home star of a race that eats is farther than 180
+units from such a planet. A planet grows food when `food_farmer_base` gives
+its climate more than 0.
+
+When a home has none, Hegemon picks a system within reach at random (not a
+black hole). A planet of it gets a climate its orbit allows, rolled until
+it grows food; a system without planets gets one in a free orbit, or an
+asteroid belt or gas giant becomes one. When no system is in reach, the
+galaxy is made again. (In small galaxies the original sometimes leaves a
+home without one, up to 254 units away; Hegemon doesn't.)
+
+The manual also says that the closest star to each home has a planet to
+colonise. The measured galaxies don't show that: in about one in ten home
+systems, whichever way distance is measured, the closest star has no
+planet (89 % have one; Hegemon's galaxies 84 %), so Hegemon has no such
+rule.
+
 ## Names
 
 A home star has its race's name: entry 0 of `STARNAME.LBX` (a text table,
@@ -203,5 +227,4 @@ patch 1.51 manual says; this matches 99 in 100 of the measured stars.
 
 ## Still to do
 
-The Antarans, the fan patch's map switches (`mapgen` table), the home
-systems' closest star and food world rules.
+The Antarans and the fan patch's map switches (`mapgen` table).
