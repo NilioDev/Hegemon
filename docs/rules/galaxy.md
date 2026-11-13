@@ -225,6 +225,28 @@ closer than 270 across and at once down (218 in a cluster). A star is in a
 nebula where the picture's colour index at the star is above 5, as the fan
 patch 1.51 manual says; this matches 99 in 100 of the measured stars.
 
+## Map switches
+
+The fan patch's `mapgen` table holds switches a mod or `USER.CFG` can turn
+on; all are off by default. Hegemon follows the manual's description of
+each:
+
+| Switch | What Hegemon does |
+|---|---|
+| `/noorion` | No Orion and no Guardian; star 0 is an ordinary star. |
+| `/nobh`, `/nowh`, `/nonebula` | No black holes, wormholes or nebulae. |
+| `/nosplint` | Splinter colonies only where a monster guards them. |
+| `/monsters` | Other than 255: that many systems with a find are guarded (as many as there are). |
+| `/planets` | Home systems have at least this many planets (1 to 5). |
+| `/hugestart`, `/richstart`, `/goodstart` | The free planet nearest the home star becomes huge, rich or ultra rich, with the home world's gravity. |
+| `-trichhw`, `-thugehw`, `-tgoodhw` | That planet becomes rich, huge, or rich, huge and terran. |
+| `-ttoxic`, `-tupoor`, `-tlowg`, `-theavyg`, `-ttiny`, `-tsmall` | Toxic planets become radiated; ultra poor ones poor (huge) or abundant; low or heavy gravity normal; tiny ones small to large (medium with `-tsmall`); small ones medium. Home worlds stay. |
+| `-ssplint`, `-snatives`, `-smarooned` | Splinter colonies become gem deposits, natives gold deposits, marooned heroes pirate caches. |
+| `-shero` | Stars with a hero become brown, other brown stars red. |
+| `-mterraform`, `-mmonst` | In guarded systems: desert and tundra planets with natives become swamp; all planets normal gravity, and rich and ultra rich ones of arid or worse terran. |
+
 ## Still to do
 
-The Antarans and the fan patch's map switches (`mapgen` table).
+The Antarans, and these map switches: `-bshowring` (needs what players
+see), `-sarti` (needs the ancient artifacts' techs), `-mgrav` ("classic"
+gravity), `-tflathw`, `-tfixedhw`, `-tgaia` and `/minstart`.

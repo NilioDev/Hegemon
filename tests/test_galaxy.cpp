@@ -52,6 +52,8 @@ constexpr const char* kList = R"({"patch_version": "test", "parameters": [
   "rows": [["toxic", "radiated", "barren", "desert", "tundra", "ocean", "swamp", "arid", "terran", "gaia"]],
   "default": [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]],
   "columns": [{"name": "bombarded"}, {"name": "hostile"}, {"name": "life_supporting"}, {"name": "lifeless"}]},
+ {"name": "mapgen", "type": "table", "rows": [], "default": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "columns": [{"name": "-ttoxic"}, {"name": "-tupoor"}, {"name": "-tlowg"}, {"name": "-theavyg"}, {"name": "-ttiny"}, {"name": "-tsmall"}, {"name": "-tflathw"}, {"name": "-tfixedhw"}, {"name": "-tgaia"}, {"name": "-trichhw"}, {"name": "-thugehw"}, {"name": "-tgoodhw"}, {"name": "-ssplint"}, {"name": "-snatives"}, {"name": "-sarti"}, {"name": "-shero"}, {"name": "-smarooned"}, {"name": "-mgrav"}, {"name": "-mterraform"}, {"name": "-mmonst"}, {"name": "-bshowring"}, {"name": "/monsters"}, {"name": "/planets"}, {"name": "/minstart"}, {"name": "/hugestart"}, {"name": "/richstart"}, {"name": "/goodstart"}, {"name": "/nobh"}, {"name": "/nowh"}, {"name": "/nonebula"}, {"name": "/nosplint"}, {"name": "/noorion"}]},
  {"name": "food_farmer_base", "type": "table", "rows": [], "default": [0, 0, 0, 2, 2, 4, 4, 2, 4, 6],
   "columns": [{"name": "toxic"}, {"name": "radiated"}, {"name": "barren"}, {"name": "desert"}, {"name": "tundra"},
               {"name": "ocean"}, {"name": "swamp"}, {"name": "arid"}, {"name": "terran"}, {"name": "gaia"}]},
@@ -347,6 +349,59 @@ HGM_TEST("Galaxy: nebulae, stars in them, no black holes there") {
         }
     }
     HGM_CHECK(inside > 0);
+}
+
+HGM_TEST("Galaxy: the fan patch's map switches") {
+    // In the order of the mapgen table's columns.
+    std::array<int, 32> v{};
+    v[21] = 2;  // /monsters: two guarded systems
+    v[22] = 5;  // /planets: five in each home system
+    v[0] = 1;   // -ttoxic
+    v[11] = 1;  // -tgoodhw
+    v[13] = 1;  // -snatives
+    v[27] = 1;  // /nobh
+    v[28] = 1;  // /nowh
+    v[31] = 1;  // /noorion
+    std::string switches = "[";
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        switches += (i ? ", " : "") + std::to_string(v[i]);
+    }
+    switches += "]";
+    std::string list = kList;
+    const std::string plain = "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]";
+    list.replace(list.find(plain), plain.size(), switches);
+    const std::string never = R"("max": 100, "default": 100})";
+    list.replace(list.find(never), never.size(), R"("max": 100, "default": 0})");
+    const Parameters p = Parameters::defaults(list);
+    const GalaxyGenerator gen(p, testNames());
+    Random r(17);
+    for (int round = 0; round < 10; ++round) {
+        const Galaxy g = gen.generate(settings(3), r);
+        HGM_CHECK(g.stars.size() == 24);
+        for (const Star& star : g.stars) {
+            HGM_CHECK(star.special != Special::Orion && star.special != Special::Natives);
+            HGM_CHECK(star.wormhole == -1 && star.colour != StarColour::BlackHole);
+        }
+        HGM_CHECK(g.monsters.size() == 2);
+        for (const Monster& m : g.monsters) {
+            HGM_CHECK(m.kind != MonsterKind::Guardian);
+        }
+        for (const Planet& q : g.planets) {
+            HGM_CHECK(q.climate != Climate::Toxic);
+        }
+        for (const HomeSystem& h : g.homes) {
+            const Star& star = g.stars.at(static_cast<std::size_t>(h.star));
+            HGM_CHECK(star.satellites() == 5);
+            // The free planet nearest the star: rich, huge and terran.
+            for (const int o : star.orbits) {
+                if (o != h.planet) {
+                    const Planet& q = g.planets.at(static_cast<std::size_t>(o));
+                    HGM_CHECK(q.minerals == Minerals::Rich && q.size == PlanetSize::Huge && q.climate == Climate::Terran);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 HGM_TEST("Galaxy: too many players for the stars") {
