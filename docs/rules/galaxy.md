@@ -62,18 +62,10 @@ orange or red, all about as likely.
 ## Satellites
 
 A star has five orbits; each holds nothing, an asteroid belt, a gas giant
-or a planet. How many orbits are taken depends on the star's colour and is
-not in the tables (measured, in percent):
-
-| Colour | 0 | 1 | 2 | 3 | 4 | 5 |
-|---|---|---|---|---|---|---|
-| Blue | 11 | 16 | 9 | 21 | 21 | 22 |
-| White | 9 | 31 | 21 | 20 | 19 | 0 |
-| Yellow | 0 | 10 | 31 | 20 | 21 | 18 |
-| Orange | 0 | 1 | 27 | 17 | 24 | 31 |
-| Red | 7 | 30 | 34 | 17 | 12 | 0 |
-| Brown | 77 | 23 | 0 | 0 | 0 | 0 |
-| Black hole | 100 | 0 | 0 | 0 | 0 | 0 |
+or a planet. How many are taken: a roll from 0 to 9 picks the row of
+`class_to_num_satellites`, the star's colour the column. By default a red
+star has 0 to 4 (10, 30, 30, 20 and 10 %), an orange one 2 to 5; black holes
+have none. The measured galaxies match the table.
 
 Which orbits: one at a time among the free ones, with the weights in
 `satellite_orbit_chance` for the galaxy's age (all 20 at average age, so

@@ -31,6 +31,9 @@ constexpr const char* kList = R"({"patch_version": "test", "parameters": [
   "rows": [["blue", "white", "yellow", "orange", "red", "brown", "black_hole"]],
   "default": [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [1, 1, 1], [0, 0, 0], [0, 0, 0]],
   "columns": [{"name": "young"}, {"name": "average"}, {"name": "old"}]},
+ {"name": "class_to_num_satellites", "type": "table",
+  "rows": [["random0", "random1", "random2", "random3", "random4", "random5", "random6", "random7", "random8", "random9"]],
+  "default": 2, "columns": [{"name": "blue"}, {"name": "white"}, {"name": "yellow"}, {"name": "orange"}, {"name": "red"}, {"name": "brown"}]},
  {"name": "satellite_orbit_chance", "type": "table", "rows": [["orbit1", "orbit2", "orbit3", "orbit4", "orbit5"]],
   "default": 1, "columns": [{"name": "young"}, {"name": "average"}, {"name": "old"}]},
  {"name": "orbit_to_satellite_type", "type": "table",
@@ -128,6 +131,13 @@ HGM_TEST("Galaxy: stars apart, homes apart, planets from the tables") {
             }
         }
         HGM_CHECK(names.size() == g.stars.size());
+        for (std::size_t i = 1; i < g.stars.size(); ++i) {
+            const bool home = std::any_of(g.homes.begin(), g.homes.end(),
+                                          [&](const HomeSystem& h) { return h.star == static_cast<int>(i); });
+            if (!home) {
+                HGM_CHECK(g.stars[i].satellites() == 2);
+            }
+        }
         HGM_CHECK(g.homes.size() == 4);
         for (std::size_t i = 0; i < g.homes.size(); ++i) {
             const HomeSystem& h = g.homes[i];

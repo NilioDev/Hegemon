@@ -52,18 +52,6 @@ constexpr std::array<std::string_view, 4> kClimateGroupNames = {"bombarded", "ho
                                                                 "lifeless"};
 constexpr std::array<std::string_view, 4> kMapSizeNames = {"small", "medium", "large", "huge"};
 
-// Measured in the original (docs/rules/galaxy.md), not in the fan patch's
-// tables: how many of a star's five orbits are taken, in percent, for 0 to
-// 5 satellites, by star colour.
-constexpr std::array<std::array<std::int64_t, kOrbits + 1>, kStarColours> kSatelliteCount = {{
-    {11, 16, 9, 21, 21, 22},  // blue
-    {9, 31, 21, 20, 19, 0},   // white
-    {0, 10, 31, 20, 21, 18},  // yellow
-    {0, 1, 27, 17, 24, 31},   // orange
-    {7, 30, 34, 17, 12, 0},   // red
-    {77, 23, 0, 0, 0, 0},     // brown
-    {100, 0, 0, 0, 0, 0},     // black hole
-}};
 // How many satellites home systems have, in percent for 0 to 5, measured.
 constexpr std::array<std::int64_t, kOrbits + 1> kHomeSatelliteCount = {0, 0, 0, 50, 34, 16};
 // The colours of home stars, in percent, also measured.
@@ -333,6 +321,23 @@ private:
         return static_cast<Climate>(r_.pick(w).value_or(static_cast<std::size_t>(Climate::Barren)));
     }
 
+    // How likely 0 to 5 satellites are for a star of this colour:
+    // class_to_num_satellites, a roll from 0 to 9 the row and the colour
+    // the column. Black holes have none.
+    std::array<std::int64_t, kOrbits + 1> satelliteCounts(StarColour colour) const {
+        std::array<std::int64_t, kOrbits + 1> w{};
+        if (colour == StarColour::BlackHole) {
+            w[0] = 1;
+            return w;
+        }
+        for (const auto roll : kRollNames) {
+            const auto n = std::clamp<std::int64_t>(
+                cell("class_to_num_satellites", roll, kColourNames[static_cast<std::size_t>(colour)]), 0, kOrbits);
+            ++w[static_cast<std::size_t>(n)];
+        }
+        return w;
+    }
+
     // The satellites of an ordinary star.
     void rollSystem(int star, std::span<const std::int64_t> counts) {
         Star& s = g_.stars[static_cast<std::size_t>(star)];
@@ -402,7 +407,7 @@ private:
             if (home) {
                 makeHome(i);
             } else {
-                rollSystem(i, kSatelliteCount[static_cast<std::size_t>(s.colour)]);
+                rollSystem(i, satelliteCounts(s.colour));
             }
         }
     }
