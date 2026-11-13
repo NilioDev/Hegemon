@@ -155,7 +155,8 @@ Parameters Parameters::defaults(std::string_view list) {
         if (s.cells.size() != cells) {
             // A default given once stands for every cell.
             if (s.cells.size() == 1) {
-                s.cells.assign(cells, s.cells.front());
+                const ConfigValue only = s.cells.front(); // assign() mustn't read from the vector itself
+                s.cells.assign(cells, only);
             } else if (s.cells.empty()) {
                 s.cells.assign(cells, ConfigValue{ConfigValue::Kind::Number, "0", 0});
             } else {
