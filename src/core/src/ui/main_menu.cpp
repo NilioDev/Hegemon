@@ -15,6 +15,12 @@ constexpr std::size_t kFirstButtonEntry = 3;
 constexpr int kButtonX = 415;
 constexpr std::array<int, MainMenu::kButtons> kButtonY = {172, 195, 217, 240, 262, 285};
 
+// The version text at the bottom right.
+constexpr const char* kVersionText = "Version 1.51";
+constexpr std::size_t kVersionFont = 1;
+constexpr int kVersionX = 492;
+constexpr int kVersionY = 433;
+
 constexpr int kNormal = 0;
 constexpr int kHighlighted = 1;
 constexpr int kGreyedOut = 2;
@@ -90,6 +96,10 @@ void MainMenu::draw(Canvas& canvas, Palette& palette) const {
     background_.draw(0, canvas);
     panel_.draw(0, canvas);
     credits_.draw(canvas);
+    TextStyle version;
+    version.shades[1] = 208;
+    version.shades[2] = 215;
+    credits_.fonts().font(kVersionFont).draw(canvas, kVersionX, kVersionY, kVersionText, version);
     for (std::size_t b = 0; b < kButtons; ++b) {
         int state = kNormal;
         if (!enabled_[b]) {

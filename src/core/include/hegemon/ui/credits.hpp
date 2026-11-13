@@ -32,6 +32,9 @@ public:
     // Where line `i` starts, from the top of the screen.
     int lineTop(std::size_t i) const;
 
+    // The fonts the credits were read with, for the rest of the menu.
+    const FontSet& fonts() const { return fonts_; }
+
 private:
     void advanceTicks(std::uint64_t ticks);
 

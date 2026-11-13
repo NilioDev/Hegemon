@@ -2,9 +2,13 @@
 
 ## A one-to-one copy first
 
-Without add-ons, Hegemon plays exactly like version 1.31 of the 1996 original:
-the same rules, screens, computer players, numbers, random galaxies and
-savegames. Anything new, such as gamepad controls or scaling to modern
+Without add-ons, Hegemon plays exactly like the 1996 original with the
+community fan patch 1.51 (`ORION150.EXE` from moo2mod.com): the same rules,
+screens, computer players, numbers, random galaxies and savegames. The fan
+patch keeps most of its rules in readable files (`ORION2.CFG`, `USER.CFG`,
+the mods under `150\mods`, Lua scripts and its own LBX files); Hegemon reads
+those same files, so a change to them works in Hegemon without a new
+release. Anything new, such as gamepad controls or scaling to modern
 screens, is added on top without changing how the game plays or looks.
 
 When the original's behaviour is unclear, we observe the original program and

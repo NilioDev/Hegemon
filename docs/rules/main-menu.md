@@ -1,7 +1,8 @@
 # Main menu
 
-Measured on the original's DOS program under DOSBox, by comparing captures
-of its screen with pictures from `MAINMENU.LBX`.
+Measured on the original's DOS program with fan patch 1.51 (`ORION150.EXE`)
+under DOSBox, by comparing captures of its screen with pictures from
+`MAINMENU.LBX`.
 
 ## What is drawn
 
@@ -9,7 +10,7 @@ of its screen with pictures from `MAINMENU.LBX`.
 2. Entry 2 on top of it: the panel on the right, with all six buttons in
    their normal look. Its own 256 colours replace those of entry 1 (they are
    the same for the parts that show).
-3. The credits, see below.
+3. The credits and the version text, see below.
 4. Each button in its current look, at x = 415 and, from the top, y = 172,
    195, 217, 240, 262 and 285.
 
@@ -62,6 +63,12 @@ all of them match pixel for pixel, apart from frames that the capture took
 while the original was still drawing them, where a few lines show a colour
 from one step earlier.
 
+## The version text
+
+`Version 1.51` in font 1 of `FONTS.LBX`, with its top left corner at (492,
+433). Shade 1 is drawn in colour 208, shade 2 in 215; there is no shadow.
+The unpatched 1.31 shows `Version 1.31` in the same place.
+
 ## Which buttons can be used
 
 - **Continue** is greyed out unless the autosave `SAVE10.GAM` is there.
@@ -85,9 +92,10 @@ A or Enter takes it. This uses the original's own highlighted pictures.
 
 ## Still to do
 
-- The version text at the bottom right. Which text it is depends on the
-  version Hegemon copies.
 - A few small lights on the right edge of the frame that change over time.
+- Four pixels of the background just left of the version text, and two short
+  stretches of the rightmost column (x = 639, rows 136 to 143 and 336 to
+  345), are black in the original.
 - The original's mouse pointer: a small gun turret. It is not one of the
   pictures in the LBX archives.
 - What each button leads to. Quit Game closes Hegemon for now.

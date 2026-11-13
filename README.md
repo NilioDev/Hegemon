@@ -4,14 +4,15 @@
 Antares* on today's computers, phones and tablets, without an emulator.**
 
 Hegemon is a free, open-source, from-scratch engine for the original game.
-Bring your own copy (version 1.31, DOS or Windows 95): Hegemon reads its files
-and plays the game exactly as the original does, with the same rules,
-screens, computer players and savegames, scaled sharply to any screen and
-with gamepad, mouse, keyboard and touch controls.
+Bring your own copy: Hegemon reads its files and plays the game exactly as
+the original with the community fan patch 1.51 from
+[moo2mod.com](https://moo2mod.com/) does, with the same rules, screens,
+computer players and savegames, scaled sharply to any screen and with
+gamepad, mouse, keyboard and touch controls.
 
 > [!NOTE]
 > **Status: just started.** Hegemon shows the original's main menu from your
-> files, with its scrolling credits. Continue and Load Game are only usable
+> files, with its scrolling credits and version text. Continue and Load Game are only usable
 > when you have savegames, as in the original, and the buttons light up under
 > the mouse or the gamepad. Quit Game closes Hegemon; the other buttons don't
 > lead anywhere yet.
@@ -21,8 +22,10 @@ game. It contains none of the original game's files: you need your own copy.
 
 ## Planned
 
-- 🎯 A one-to-one copy of version 1.31: same rules, same look, same computer
-  players, same galaxies.
+- 🎯 A one-to-one copy of the game with fan patch 1.51: same rules, same
+  look, same computer players, same galaxies.
+- 🧩 The fan patch's own settings, scripts and mods are read from your game
+  folder, so changes made there work in Hegemon too.
 - 🖥️ Windows, macOS, Linux and Android from one codebase.
 - 🎮 Full gamepad support: a cursor that snaps to buttons, planets, ships and
   lists, the shoulder buttons to switch between screens and colonies, and
