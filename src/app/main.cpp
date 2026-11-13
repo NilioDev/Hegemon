@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The Hegemon app. For now it opens a window at the original's 640×480,
-// scaled sharply to the window, finds the player's game files and says
-// whether every archive in them can be read. Gamepads are opened as they
-// are plugged in, so their buttons work from the first screen on.
+// scaled sharply to the window, finds the player's game files and shows the
+// picture of the main menu from them. Gamepads are opened as they are
+// plugged in, so their buttons work from the first screen on.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "hegemon/data/image.hpp"
 #include "hegemon/data/lbx.hpp"
 #include "hegemon/data/reader.hpp"
 #include "hegemon/game_files.hpp"
@@ -26,6 +27,7 @@ constexpr int kScreenH = 480;
 struct App {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
+    SDL_Texture* picture = nullptr;
     std::vector<std::string> lines;
 };
 
@@ -76,6 +78,32 @@ void checkGameFiles(App& app, const std::filesystem::path& folder) {
     app.lines.push_back(std::to_string(failed) + " files are videos or could not be read.");
 }
 
+// The picture behind the original's main menu, in its own colours.
+void showMainMenu(App& app, const std::filesystem::path& folder) {
+    const auto file = hegemon::findFileNoCase(folder, "MAINMENU.LBX");
+    if (!file) {
+        return;
+    }
+    try {
+        const auto archive = hegemon::LbxArchive::load(*file);
+        const auto image = hegemon::Image::parse(archive.entry(1));
+        hegemon::Palette palette;
+        image.applyPalette(palette);
+        hegemon::Canvas canvas(kScreenW, kScreenH);
+        image.draw(0, canvas);
+        std::vector<std::uint8_t> rgba(static_cast<std::size_t>(kScreenW) * kScreenH * 4);
+        hegemon::toRgba(canvas, palette, rgba);
+        app.picture = SDL_CreateTexture(app.renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, kScreenW,
+                                        kScreenH);
+        if (app.picture != nullptr) {
+            SDL_SetTextureScaleMode(app.picture, SDL_SCALEMODE_NEAREST);
+            SDL_UpdateTexture(app.picture, nullptr, rgba.data(), kScreenW * 4);
+        }
+    } catch (const hegemon::FormatError& e) {
+        app.lines.push_back(std::string("The main menu picture could not be read: ") + e.what());
+    }
+}
+
 } // namespace
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
@@ -103,6 +131,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     }
     if (folder && hegemon::isGameFolder(*folder)) {
         checkGameFiles(*app, *folder);
+        showMainMenu(*app, *folder);
     } else {
         app->lines.push_back("Put your own copy of the original game in a folder");
         app->lines.push_back("named gamedata next to Hegemon and start it again.");
@@ -143,6 +172,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     auto* app = static_cast<App*>(appstate);
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
+    if (app->picture != nullptr) {
+        SDL_RenderTexture(app->renderer, app->picture, nullptr, nullptr);
+        SDL_RenderPresent(app->renderer);
+        return SDL_APP_CONTINUE;
+    }
     SDL_SetRenderDrawColor(app->renderer, 220, 220, 220, 255);
     float y = 16;
     for (const auto& line : app->lines) {
@@ -154,5 +188,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult) {
-    delete static_cast<App*>(appstate);
+    auto* app = static_cast<App*>(appstate);
+    if (app->picture != nullptr) {
+        SDL_DestroyTexture(app->picture);
+    }
+    delete app;
 }
