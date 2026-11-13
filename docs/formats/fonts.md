@@ -44,3 +44,12 @@ drawn first, in its own colour, at fixed offsets from every drawn pixel; the
 glyphs then go on top. The usual shadow is one pixel right and one down; the
 credits draw a one-pixel outline all round instead (see
 [../rules/main-menu.md](../rules/main-menu.md)).
+
+## Pointers
+
+Entries 1 to 13 each hold a set of mouse pointers. An entry is 1024 bytes
+(what they are for is not known yet; they look like a palette) followed by 20
+pictures of 24 by 24 pixels, one byte a pixel, row by row. Colour 0 is
+see-through. The main menu uses picture 0 of entry 6, see
+[../rules/main-menu.md](../rules/main-menu.md). Hegemon refuses an entry that
+is too short for all 20 pictures.

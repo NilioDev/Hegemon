@@ -8,6 +8,7 @@ add_library(hgm_core STATIC
     src/data/image.cpp
     src/data/font.cpp
     src/data/text_table.cpp
+    src/data/pointers.cpp
     src/ui/credits.cpp
     src/config/fan_patch_config.cpp
 )

@@ -29,9 +29,6 @@ constexpr int kStartTop = 456;
 constexpr int kLineHeight = 14;
 constexpr int kStep = 2;          // pixels per step
 constexpr std::uint64_t kTicksPerStep = 3;
-// The PC timer: 1193182 Hz divided by 65536, about 18.2 ticks a second.
-constexpr std::uint64_t kTimerHz = 1193182;
-constexpr std::uint64_t kTimerDivisor = 65536;
 
 // Near the top and the bottom of the window the lines fade: the colours of
 // their two shades by where the line's top is.
@@ -105,10 +102,7 @@ void Credits::advanceTicks(std::uint64_t ticks) {
 }
 
 void Credits::tick(std::uint64_t ms) {
-    const std::uint64_t before = elapsedMicros_ * kTimerHz / (kTimerDivisor * 1000000);
-    elapsedMicros_ += ms * 1000;
-    const std::uint64_t after = elapsedMicros_ * kTimerHz / (kTimerDivisor * 1000000);
-    advanceTicks(after - before);
+    advanceTicks(timer_.advance(ms));
 }
 
 void Credits::draw(Canvas& canvas) const {

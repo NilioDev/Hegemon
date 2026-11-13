@@ -5,8 +5,10 @@
 #pragma once
 
 #include "hegemon/data/image.hpp"
+#include "hegemon/data/pointers.hpp"
 #include "hegemon/game_data.hpp"
 #include "hegemon/ui/credits.hpp"
+#include "hegemon/ui/pit_timer.hpp"
 
 #include <array>
 #include <optional>
@@ -27,18 +29,34 @@ public:
     bool enabled(Choice choice) const { return enabled_[index(choice)]; }
     std::optional<Choice> highlighted() const { return highlighted_; }
 
-    // The mouse moved to (x, y) on the 640×480 screen.
+    // Ticks of the PC timer from the start of the opening animation (one
+    // frame a tick) until the buttons appear, and until the credits start.
+    static constexpr std::uint64_t kOpenedTick = 50;
+    static constexpr std::uint64_t kCreditsStartTick = 28;
+
+    // The mouse moved to (x, y) on the 640×480 screen. This also shows the
+    // original's mouse pointer there.
     void pointerMoved(int x, int y);
+    // Hides the pointer while the gamepad or keyboard is used (Hegemon's
+    // addition); the next mouse move shows it again.
+    void hidePointer() { pointerVisible_ = false; }
+    bool pointerVisible() const { return pointerVisible_; }
     // A click at (x, y): the choice of the enabled button there, if any.
     std::optional<Choice> click(int x, int y);
 
     // Gamepad and keyboard: move the highlight to the next or previous button
     // that can be used, and take the highlighted one.
     void moveHighlight(int step);
-    std::optional<Choice> activate() const;
+    std::optional<Choice> activate();
 
-    // Lets `ms` milliseconds pass, for the scrolling credits.
-    void tick(std::uint64_t ms) { credits_.tick(ms); }
+    // Lets `ms` milliseconds pass: the opening animation and the credits.
+    void tick(std::uint64_t ms);
+
+    // The menu opens with an animation; the buttons appear after it. Until
+    // then the pointer, clicks and the gamepad do nothing, and any key, click
+    // or button skips to the end.
+    bool opening() const { return openingTicks_ < kOpenedTick; }
+    void skipOpening();
     const Credits& credits() const { return credits_; }
     Credits& credits() { return credits_; }
 
@@ -66,9 +84,20 @@ private:
     static std::size_t index(Choice c) { return static_cast<std::size_t>(c); }
     std::optional<std::size_t> buttonAt(int x, int y) const;
     void drawLabel(Canvas& canvas, const Label& label) const;
+    void drawPointer(Canvas& canvas) const;
+
+    void advanceOpening(std::uint64_t ticks);
 
     Image background_;
     Image panel_;
+    Image opening_;
+    PointerSet pointers_;
+    int pointerX_ = 320, pointerY_ = 240; // the original starts it mid-screen
+    bool pointerVisible_ = true;
+    Canvas opened_{640, 480};
+    std::size_t openingFrames_ = 0; // frames drawn into opened_
+    std::uint64_t openingTicks_ = 0;
+    PitTimer timer_;
     Credits credits_;
     // Per button: normal, highlighted and greyed out.
     std::vector<std::array<Image, 3>> buttons_;

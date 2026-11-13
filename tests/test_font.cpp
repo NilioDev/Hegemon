@@ -3,6 +3,7 @@
 
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/lbx.hpp"
+#include "hegemon/data/pointers.hpp"
 #include "hegemon/data/reader.hpp"
 #include "hegemon/data/text_table.hpp"
 #include "hegemon/game_files.hpp"
@@ -170,4 +171,27 @@ HGM_TEST("Fonts: the player's FONTS.LBX and IFONTS.LBX read without errors") {
             HGM_CHECK(set.font(f).width('A') > 0);
         }
     }
+}
+
+HGM_TEST("Pointers: 24×24 after a palette, colour 0 see-through, hot spot top left") {
+    std::vector<std::uint8_t> entry(1024 + 20 * 24 * 24, 0);
+    entry[1024 + 576 + 0] = 7;           // pointer 1, (0, 0)
+    entry[1024 + 576 + 2 * 24 + 23] = 9; // pointer 1, (23, 2)
+    const auto set = hegemon::PointerSet::parse(entry);
+    Canvas canvas(40, 40, 99);
+    set.draw(1, canvas, 10, 5);
+    HGM_CHECK(canvas.at(10, 5) == 7);
+    HGM_CHECK(canvas.at(33, 7) == 9);
+    HGM_CHECK(canvas.at(11, 5) == 99);
+    set.draw(1, canvas, 30, 38); // clipped at the edges
+    HGM_CHECK(canvas.at(30, 38) == 7);
+
+    entry.pop_back();
+    bool threw = false;
+    try {
+        (void)hegemon::PointerSet::parse(entry);
+    } catch (const FormatError&) {
+        threw = true;
+    }
+    HGM_CHECK(threw);
 }

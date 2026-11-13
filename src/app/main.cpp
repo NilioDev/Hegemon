@@ -123,7 +123,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         app->lines.push_back("Put your own copy of the original game in a folder");
         app->lines.push_back("named gamedata next to Hegemon and start it again.");
     }
-    if (!app->menu) {
+    if (app->menu) {
+        SDL_HideCursor(); // the menu draws the original's own pointer
+    } else {
         app->lines.push_back("");
         app->lines.push_back("Esc or the gamepad's B button closes this window.");
         for (const auto& line : app->lines) {
@@ -143,14 +145,20 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         SDL_OpenGamepad(event->gdevice.which);
         break;
     case SDL_EVENT_MOUSE_MOTION:
-        SDL_ShowCursor();
         if (menu != nullptr) {
             screenPoint(*app, event);
             menu->pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
         }
         break;
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+        if (menu != nullptr) {
+            menu->hidePointer();
+        }
+        break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        if (menu != nullptr && event->button.button == SDL_BUTTON_LEFT) {
+        if (menu != nullptr && menu->opening()) {
+            menu->skipOpening(); // any button skips the opening animation
+        } else if (menu != nullptr && event->button.button == SDL_BUTTON_LEFT) {
             screenPoint(*app, event);
             if (const auto choice = menu->click(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
                 return choose(*choice);
@@ -161,7 +169,10 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         if (menu == nullptr) {
             return event->key.key == SDLK_ESCAPE ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
         }
-        if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+        if (menu->opening()) {
+            menu->skipOpening(); // any key skips the opening animation
+        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            menu->hidePointer();
             menu->moveHighlight(event->key.key == SDLK_UP ? -1 : 1);
         } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
             if (const auto choice = menu->activate()) {
@@ -170,11 +181,13 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        SDL_HideCursor();
         if (menu == nullptr) {
             return event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
         }
-        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
+        menu->hidePointer();
+        if (menu->opening()) {
+            menu->skipOpening();
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
             menu->moveHighlight(-1);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
             menu->moveHighlight(1);
@@ -189,7 +202,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
             const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
             if (direction != 0 && direction != app->stickDirection) {
-                SDL_HideCursor();
+                menu->hidePointer();
                 menu->moveHighlight(direction);
             }
             app->stickDirection = direction;

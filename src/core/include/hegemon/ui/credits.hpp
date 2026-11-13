@@ -6,6 +6,7 @@
 
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
+#include "hegemon/ui/pit_timer.hpp"
 
 #include <cstdint>
 #include <string>
@@ -23,6 +24,8 @@ public:
 
     // Lets `ms` milliseconds pass.
     void tick(std::uint64_t ms);
+    // Lets ticks of the PC timer pass.
+    void advanceTicks(std::uint64_t ticks);
     void draw(Canvas& canvas) const;
 
     // How far the lines have moved up since they last started, in pixels.
@@ -36,12 +39,10 @@ public:
     const FontSet& fonts() const { return fonts_; }
 
 private:
-    void advanceTicks(std::uint64_t ticks);
-
     FontSet fonts_;
     std::vector<std::pair<std::string, std::string>> lines_;
     int offset_ = 0;
-    std::uint64_t elapsedMicros_ = 0;
+    PitTimer timer_;
     std::uint64_t ticksDone_ = 0;
 };
 

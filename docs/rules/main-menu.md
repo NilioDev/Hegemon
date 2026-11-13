@@ -23,6 +23,28 @@ and 22 or 23 high.
 With these steps Hegemon's screen matches the original pixel for pixel,
 except for what is listed under *Still to do*.
 
+## The opening
+
+The menu does not appear at once. Entry 0 of `MAINMENU.LBX` is an animation
+of 50 frames, 640 by 480, each frame drawn over the one before it. The
+original draws frame *t* at timer tick *t* (18.2 ticks a second, the PC's
+timer), starting with frame 0 as soon as the menu opens.
+
+- The credits start scrolling at tick 28, while the animation still runs.
+- The buttons, the version text and the mod name appear at tick 50, when
+  the animation is done.
+- The last frame is the finished menu: it differs from entries 1 and 2 in
+  only 22 pixels: four just left of the version text and two short stretches
+  of the rightmost column (x = 639, rows 136 to 143 and 336 to 345) are
+  black. They stay as the animation left them.
+- During the animation the mouse pointer is drawn and moves, but no button
+  lights up. A key or a mouse click skips straight to the end; that press
+  does nothing else.
+
+The colours come from entries 1 and 2, as on the finished menu.
+
+**Added in Hegemon:** a gamepad button also skips the opening.
+
 ## The credits
 
 The lines of `CREDITS.LBX` (see [../formats/text.md](../formats/text.md))
@@ -100,16 +122,22 @@ over it; a greyed-out button stays greyed out. Holding the mouse button down
 does not change the look. The arrow keys do not move a highlight in the
 original.
 
+The pointer is a small gun turret, 24 by 24 pixels: picture 0 of entry 6 of
+`FONTS.LBX` (see [../formats/fonts.md](../formats/fonts.md)). Its top-left
+pixel is the point that counts, and it starts in the middle of the screen
+at (320, 240).
+
+**Added in Hegemon:** the pointer is hidden while the gamepad or the
+keyboard is used, and when the mouse leaves the window.
+
 **Added in Hegemon:** with a gamepad or the keyboard, Up and Down move the
 highlight from one usable button to the next (skipping greyed-out ones), and
 A or Enter takes it. This uses the original's own highlighted pictures.
 
 ## Still to do
 
-- A few small lights on the right edge of the frame that change over time.
-- Four pixels of the background just left of the version text, and two short
-  stretches of the rightmost column (x = 639, rows 136 to 143 and 336 to
-  345), are black in the original.
-- The original's mouse pointer: a small gun turret. It is not one of the
-  pictures in the LBX archives.
+- Whether skipping the opening also moves the credits on, and which pointer
+  the other screens use.
+- Entry 22, a second animation of 50 frames, probably played when the menu
+  closes.
 - What each button leads to. Quit Game closes Hegemon for now.

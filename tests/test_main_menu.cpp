@@ -65,6 +65,7 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     }
     hegemon::GameData data(menuFolder(game, {"SAVE10.GAM"}));
     hegemon::MainMenu menu(data);
+    menu.skipOpening();
     const auto quit = menu.buttonRect(5);
     HGM_CHECK(quit.x == 415);
     HGM_CHECK(quit.y == 285);
@@ -96,8 +97,10 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     hegemon::Canvas lit(640, 480);
     hegemon::Palette palette;
     menu.pointerMoved(0, 0);
+    menu.hidePointer(); // only the button's look counts here
     menu.draw(plain, palette);
     menu.pointerMoved(450, 250);
+    menu.hidePointer();
     menu.draw(lit, palette);
     int changed = 0;
     for (int y = 0; y < 480; ++y) {
@@ -121,7 +124,8 @@ HGM_TEST("Main menu: version and mod name where the fan patch's settings put the
     std::ofstream(folder / "ORION2.CFG") << "format version = \"Version $VERSION$\" 1 r 541 433;\n"
                                          << "format mod_name = \"\" 1 r 541 419;\n";
     hegemon::GameData data(folder);
-    const hegemon::MainMenu menu(data);
+    hegemon::MainMenu menu(data);
+    menu.skipOpening();
     HGM_CHECK(menu.versionLabel().text == "Version 1.51");
     HGM_CHECK(menu.modNameLabel().text.empty());
     hegemon::Canvas canvas(640, 480);
@@ -156,4 +160,94 @@ HGM_TEST("Main menu: the fan patch's defaults when its settings don't say") {
     HGM_CHECK(menu.versionLabel().y == 420);
     HGM_CHECK(menu.modNameLabel().text == "Config: ");
     fs::remove_all(folder);
+}
+
+HGM_TEST("Main menu: the opening animation, one frame a tick, then the buttons") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!hegemon::isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    hegemon::GameData data(menuFolder(game, {"SAVE10.GAM"}));
+    hegemon::MainMenu menu(data);
+    HGM_CHECK(menu.opening());
+    hegemon::Palette palette;
+    const auto frame = [&] {
+        hegemon::Canvas canvas(640, 480);
+        menu.draw(canvas, palette);
+        return canvas;
+    };
+    // No highlight and no choice while it opens.
+    menu.pointerMoved(450, 250);
+    HGM_CHECK(!menu.highlighted());
+    const auto first = frame();
+    // 49 ticks of the PC timer are a little under 2.7 seconds.
+    menu.tick(2600);
+    HGM_CHECK(menu.opening());
+    const auto later = frame();
+    int changed = 0;
+    for (int y = 0; y < 480; ++y) {
+        for (int x = 0; x < 640; ++x) {
+            changed += first.at(x, y) != later.at(x, y) ? 1 : 0;
+        }
+    }
+    HGM_CHECK(changed > 10000);
+    menu.tick(200);
+    HGM_CHECK(!menu.opening());
+    menu.pointerMoved(450, 250);
+    HGM_CHECK(menu.highlighted() == Choice::Multiplayer);
+
+    // A click while it opens only skips to the end.
+    hegemon::MainMenu skipped(data);
+    HGM_CHECK(!skipped.click(450, 250));
+    HGM_CHECK(!skipped.opening());
+    HGM_CHECK(skipped.click(450, 250) == Choice::Multiplayer);
+    // The screen it ends on is the same either way.
+    hegemon::Canvas other(640, 480);
+    menu.pointerMoved(0, 0);
+    skipped.pointerMoved(0, 0);
+    menu.hidePointer();
+    skipped.hidePointer();
+    menu.draw(other, palette);
+    hegemon::Canvas mine(640, 480);
+    skipped.draw(mine, palette);
+    bool same = true;
+    for (int y = 0; y < 180; ++y) {
+        for (int x = 0; x < 640; ++x) {
+            same = same && mine.at(x, y) == other.at(x, y);
+        }
+    }
+    HGM_CHECK(same);
+    fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
+}
+
+HGM_TEST("Main menu: the original's pointer where the mouse is") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!hegemon::isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    hegemon::GameData data(menuFolder(game, {}));
+    hegemon::MainMenu menu(data);
+    menu.skipOpening();
+    hegemon::Palette palette;
+    hegemon::Canvas without(640, 480);
+    menu.hidePointer();
+    menu.draw(without, palette);
+    HGM_CHECK(!menu.pointerVisible());
+    menu.pointerMoved(100, 60);
+    HGM_CHECK(menu.pointerVisible());
+    hegemon::Canvas with(640, 480);
+    menu.draw(with, palette);
+    int changed = 0;
+    for (int y = 0; y < 480; ++y) {
+        for (int x = 0; x < 640; ++x) {
+            if (with.at(x, y) != without.at(x, y)) {
+                ++changed;
+                HGM_CHECK(x >= 100 && x < 124 && y >= 60 && y < 84);
+            }
+        }
+    }
+    HGM_CHECK(changed > 100);
+    // Its tip is the hot spot.
+    HGM_CHECK(with.at(100, 60) != without.at(100, 60));
+    fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
 }
