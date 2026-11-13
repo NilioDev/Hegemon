@@ -91,12 +91,11 @@ constexpr std::array<std::array<std::int64_t, 5>, 11> kGuardKind = {{
 // The climates natives, splinter colonies and ancient artifacts have, in
 // percent from desert to gaia (measured).
 constexpr std::array<std::int64_t, 7> kLivelyClimate = {16, 18, 7, 12, 8, 25, 13};
-// Home systems have at least this many planets (the fan patch's /planets
-// switch, whose default is 3).
-constexpr int kDefaultHomePlanets = 3;
 // Map units in a parsec: warp_interdictor_range says 8100 is 3 parsecs
 // squared, so 90 units are 3 parsecs.
 constexpr double kParsec = 30.0;
+// /monsters at this leaves the number of monsters to chance.
+constexpr std::int64_t kRandomMonsters = 255;
 // Every home system of a race that eats has a planet that grows food
 // within this many parsecs (the fan patch's manual, and measured).
 constexpr double kFoodWorldParsecs = 6.0;
@@ -158,6 +157,8 @@ public:
             layout_ = map_;
         }
         age_ = static_cast<std::size_t>(s.age);
+        orion_ = flag("/noorion") == 0;
+        first_ = orion_ ? 1 : 0;
     }
 
     Galaxy make() {
@@ -182,12 +183,15 @@ public:
             g_.monsters.clear();
             g_.nebulae.clear();
             if (place(count) && chooseHomes(apart)) {
-                chooseOrion();
+                if (orion_) {
+                    chooseOrion();
+                }
                 placeNebulae();
                 fill();
                 specials();
                 monsters();
                 if (foodWorlds()) {
+                    switches();
                     name();
                     return std::move(g_);
                 }
@@ -197,6 +201,9 @@ public:
     }
 
 private:
+    // One of the fan patch's map switches (the mapgen table).
+    std::int64_t flag(std::string_view name) const { return p_.integer("mapgen", {}, name); }
+
     std::int64_t cell(std::string_view table, std::string_view row, std::string_view column) const {
         return p_.integer(table, {row}, column);
     }
@@ -328,7 +335,7 @@ private:
         const Layout& l = kLayout[layout_];
         const int areaW = l.nebulaW > 0 ? l.nebulaW : g_.width;
         const int areaH = l.nebulaH > 0 ? l.nebulaH : g_.height;
-        const auto count = r_.pick(l.nebulae).value_or(0);
+        const auto count = flag("/nonebula") != 0 ? 0 : r_.pick(l.nebulae).value_or(0);
         for (std::size_t n = 0; n < count; ++n) {
             for (int tries = 0; tries < 200; ++tries) {
                 Nebula b;
@@ -363,7 +370,7 @@ private:
         for (std::size_t c = 0; c < kStarColours; ++c) {
             w[c] = cell("star_class_chance", kColourNames[c], kAgeNames[age_]);
         }
-        if (inNebula) {
+        if (inNebula || flag("/nobh") != 0) {
             w[static_cast<std::size_t>(StarColour::BlackHole)] = 0;
         }
         // Measured: black holes are rarer than the table says (about 2.4 in
@@ -501,7 +508,25 @@ private:
     }
 
     void fill() {
-        // Orion.
+        if (orion_) {
+            makeOrion();
+        }
+        // The others.
+        for (int i = first_; i < static_cast<int>(g_.stars.size()); ++i) {
+            const bool home = std::any_of(g_.homes.begin(), g_.homes.end(), [&](const HomeSystem& h) {
+                return h.star == i;
+            });
+            Star& s = g_.stars[static_cast<std::size_t>(i)];
+            s.colour = home ? static_cast<StarColour>(r_.pick(kHomeColour).value_or(4)) : rollColour(s.inNebula, nearHome(i));
+            if (home) {
+                makeHome(i);
+            } else {
+                rollSystem(i, satelliteCounts(s.colour));
+            }
+        }
+    }
+
+    void makeOrion() {
         Star& orion = g_.stars[0];
         orion.colour = static_cast<StarColour>(r_.below(5)); // blue to red
         orion.special = Special::Orion;
@@ -524,19 +549,6 @@ private:
                 orion.orbits[o] = add(p);
             }
         }
-        // The others.
-        for (int i = 1; i < static_cast<int>(g_.stars.size()); ++i) {
-            const bool home = std::any_of(g_.homes.begin(), g_.homes.end(), [&](const HomeSystem& h) {
-                return h.star == i;
-            });
-            Star& s = g_.stars[static_cast<std::size_t>(i)];
-            s.colour = home ? static_cast<StarColour>(r_.pick(kHomeColour).value_or(4)) : rollColour(s.inNebula, nearHome(i));
-            if (home) {
-                makeHome(i);
-            } else {
-                rollSystem(i, satelliteCounts(s.colour));
-            }
-        }
     }
 
     void makeHome(int star) {
@@ -553,7 +565,7 @@ private:
                     planets.push_back(o);
                 }
             }
-            if (static_cast<int>(planets.size()) >= kDefaultHomePlanets) {
+            if (static_cast<std::int64_t>(planets.size()) >= std::clamp<std::int64_t>(flag("/planets"), 1, 5)) {
                 break;
             }
         }
@@ -612,7 +624,10 @@ private:
             w[i] = p_.integer("planet_special_chance", {}, kSpecialNames[i]);
         }
         w[static_cast<std::size_t>(Special::Monster)] = 0; // monsters come after
-        for (int i = 1; i < static_cast<int>(g_.stars.size()); ++i) {
+        if (flag("/nowh") != 0) {
+            w[static_cast<std::size_t>(Special::Wormhole)] = 0;
+        }
+        for (int i = first_; i < static_cast<int>(g_.stars.size()); ++i) {
             Star& s = g_.stars[static_cast<std::size_t>(i)];
             if (isHome(i) || s.satellites() == 0 || s.special != Special::None || s.wormhole != -1) {
                 continue;
@@ -636,7 +651,7 @@ private:
         switch (special) {
         case Special::Wormhole: {
             std::vector<int> ends;
-            for (int j = 1; j < static_cast<int>(g_.stars.size()); ++j) {
+            for (int j = first_; j < static_cast<int>(g_.stars.size()); ++j) {
                 const Star& t = g_.stars[static_cast<std::size_t>(j)];
                 if (j != star && !isHome(j) && t.satellites() > 0 && t.special == Special::None && t.wormhole == -1 &&
                     distance(star, j) >= kLayout[layout_].wormholeApart) {
@@ -700,7 +715,7 @@ private:
             g_.monsters.push_back({MonsterKind::Guardian, 0});
         }
         std::vector<int> found;
-        for (int i = 1; i < static_cast<int>(g_.stars.size()); ++i) {
+        for (int i = first_; i < static_cast<int>(g_.stars.size()); ++i) {
             const Special sp = g_.stars[static_cast<std::size_t>(i)].special;
             const Star& s = g_.stars[static_cast<std::size_t>(i)];
             const bool planet = std::any_of(s.orbits.begin(), s.orbits.end(), [&](int o) {
@@ -710,9 +725,17 @@ private:
                 found.push_back(i);
             }
         }
+        // /monsters other than 255 asks for that many guarded systems.
+        const auto wanted = flag("/monsters");
+        if (wanted != kRandomMonsters) {
+            for (std::size_t k = found.size(); k > 1; --k) {
+                std::swap(found[k - 1], found[r_.below(static_cast<std::uint32_t>(k))]);
+            }
+        }
         int guarded = 0;
         for (const int i : found) {
-            if (guarded >= kLayout[layout_].monsters || !r_.chance(kGuardPercent)) {
+            if (wanted != kRandomMonsters ? guarded >= wanted
+                                          : guarded >= kLayout[layout_].monsters || !r_.chance(kGuardPercent)) {
                 continue;
             }
             Star& s = g_.stars[static_cast<std::size_t>(i)];
@@ -769,7 +792,7 @@ private:
             const int home = g_.homes[i].star;
             std::vector<int> inReach;
             bool fed = false;
-            for (int j = 1; j < static_cast<int>(g_.stars.size()) && !fed; ++j) {
+            for (int j = first_; j < static_cast<int>(g_.stars.size()) && !fed; ++j) {
                 const Star& t = g_.stars[static_cast<std::size_t>(j)];
                 if (isHome(j) || guarded(j) || t.colour == StarColour::BlackHole || distance(home, j) > reach) {
                     continue;
@@ -838,6 +861,126 @@ private:
         }
     }
 
+    // The fan patch's map switches that change the galaxy once it is made.
+    void switches() {
+        const auto on = [&](std::string_view name) { return flag(name) != 0; };
+        const auto homeWorld = [&](int planet) {
+            return std::any_of(g_.homes.begin(), g_.homes.end(), [&](const HomeSystem& h) { return h.planet == planet; });
+        };
+        for (int i = 0; i < static_cast<int>(g_.planets.size()); ++i) {
+            Planet& q = g_.planets[static_cast<std::size_t>(i)];
+            if (q.type != SatelliteType::Planet || homeWorld(i) || q.special == Special::Orion) {
+                continue;
+            }
+            if (on("-ttoxic") && q.climate == Climate::Toxic) {
+                q.climate = Climate::Radiated;
+            }
+            if (on("-tupoor") && q.minerals == Minerals::UltraPoor) {
+                q.minerals = q.size == PlanetSize::Huge ? Minerals::Poor : Minerals::Abundant;
+            }
+            if (on("-ttiny") && q.size == PlanetSize::Tiny) {
+                q.size = on("-tsmall") ? PlanetSize::Medium : static_cast<PlanetSize>(r_.between(1, 3));
+            }
+            if (on("-tsmall") && q.size == PlanetSize::Small) {
+                q.size = PlanetSize::Medium;
+            }
+            if ((on("-tlowg") && q.gravity == Gravity::Low) || (on("-theavyg") && q.gravity == Gravity::Heavy)) {
+                q.gravity = Gravity::Normal;
+            }
+        }
+        // Special finds.
+        for (int i = first_; i < static_cast<int>(g_.stars.size()); ++i) {
+            Star& s = g_.stars[static_cast<std::size_t>(i)];
+            const auto swapFind = [&](Special from, Special to) {
+                if (s.special != from) {
+                    return;
+                }
+                s.special = to;
+                for (const int o : s.orbits) {
+                    if (o != kNoPlanet && g_.planets[static_cast<std::size_t>(o)].special == from) {
+                        g_.planets[static_cast<std::size_t>(o)].special = to;
+                    }
+                }
+            };
+            if (on("/nosplint") && !guarded(i)) {
+                swapFind(Special::SplinterColony, Special::None);
+            }
+            if (on("-ssplint")) {
+                swapFind(Special::SplinterColony, Special::GemDeposits);
+            }
+            if (on("-snatives")) {
+                swapFind(Special::Natives, Special::GoldDeposits);
+            }
+            if (on("-smarooned")) {
+                swapFind(Special::Hero, Special::PirateCache);
+            }
+            if (on("-shero")) {
+                if (s.special == Special::Hero) {
+                    s.colour = StarColour::Brown;
+                } else if (s.colour == StarColour::Brown) {
+                    s.colour = StarColour::Red;
+                }
+            }
+        }
+        // Guarded systems.
+        for (const Monster& m : g_.monsters) {
+            if (m.kind == MonsterKind::Guardian) {
+                continue;
+            }
+            for (const int o : g_.stars[static_cast<std::size_t>(m.star)].orbits) {
+                if (o == kNoPlanet || g_.planets[static_cast<std::size_t>(o)].type != SatelliteType::Planet) {
+                    continue;
+                }
+                Planet& q = g_.planets[static_cast<std::size_t>(o)];
+                if (on("-mterraform") && q.special == Special::Natives &&
+                    (q.climate == Climate::Desert || q.climate == Climate::Tundra)) {
+                    q.climate = Climate::Swamp;
+                }
+                if (on("-mmonst")) {
+                    q.gravity = Gravity::Normal;
+                    if (q.minerals >= Minerals::Rich && q.climate <= Climate::Arid) {
+                        q.climate = Climate::Terran;
+                    }
+                }
+            }
+        }
+        // The first free planet of each home system.
+        const bool good = on("-tgoodhw");
+        const bool richer = on("-trichhw") || good;
+        const bool bigger = on("-thugehw") || good;
+        for (const HomeSystem& h : g_.homes) {
+            const Star& s = g_.stars[static_cast<std::size_t>(h.star)];
+            const auto first = std::find_if(s.orbits.begin(), s.orbits.end(), [&](int o) {
+                return o != kNoPlanet && o != h.planet && g_.planets[static_cast<std::size_t>(o)].type == SatelliteType::Planet;
+            });
+            if (first == s.orbits.end()) {
+                continue;
+            }
+            Planet& q = g_.planets[static_cast<std::size_t>(*first)];
+            const Gravity home = g_.planets[static_cast<std::size_t>(h.planet)].gravity;
+            if (richer) {
+                q.minerals = Minerals::Rich;
+            }
+            if (bigger) {
+                q.size = PlanetSize::Huge;
+            }
+            if (good) {
+                q.climate = Climate::Terran;
+            }
+            if (on("/hugestart")) {
+                q.size = PlanetSize::Huge;
+                q.gravity = home;
+            }
+            if (on("/goodstart")) {
+                q.minerals = Minerals::UltraRich;
+                q.gravity = home;
+            } else if (on("/richstart")) {
+                q.minerals = Minerals::Rich;
+                q.gravity = home;
+            }
+        }
+    }
+
     // The names: the list mixed by as many swaps of two names as it has,
     // then star i takes name i; home stars take their race's name.
     void name() {
@@ -846,7 +989,7 @@ private:
         for (std::uint32_t k = 0; k < n; ++k) {
             std::swap(list[r_.below(n)], list[r_.below(n)]);
         }
-        for (std::size_t i = 1; i < g_.stars.size(); ++i) {
+        for (auto i = static_cast<std::size_t>(first_); i < g_.stars.size(); ++i) {
             g_.stars[i].name = i < list.size() ? list[i] : "Star " + std::to_string(i);
         }
         for (const auto& h : g_.homes) {
@@ -866,6 +1009,8 @@ private:
     std::size_t stars_ = 1;  // the column of stars_in_galaxy
     std::size_t layout_ = 1; // of kLayout
     std::size_t age_ = 1;
+    bool orion_ = true; // not left out by /noorion
+    int first_ = 1;     // the first star that isn't Orion
     Galaxy g_;
 };
 
