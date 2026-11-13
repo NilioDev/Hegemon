@@ -9,7 +9,8 @@ of its screen with pictures from `MAINMENU.LBX`.
 2. Entry 2 on top of it: the panel on the right, with all six buttons in
    their normal look. Its own 256 colours replace those of entry 1 (they are
    the same for the parts that show).
-3. Each button in its current look, at x = 415 and, from the top, y = 172,
+3. The credits, see below.
+4. Each button in its current look, at x = 415 and, from the top, y = 172,
    195, 217, 240, 262 and 285.
 
 The buttons are, in order: Continue, Load Game, New Game, Multi Player, Hall
@@ -20,6 +21,46 @@ and 22 or 23 high.
 
 With these steps Hegemon's screen matches the original pixel for pixel,
 except for what is listed under *Still to do*.
+
+## The credits
+
+The lines of `CREDITS.LBX` (see [../formats/text.md](../formats/text.md))
+scroll up through a window on the left of the screen, in font 3 of
+`FONTS.LBX` (see [../formats/fonts.md](../formats/fonts.md)).
+
+- **Layout.** Line `i` (from 0) starts at y = 456 + 14 × `i` − *offset*. The
+  left column starts at x = 66: its text, a space, and then as many dots as
+  fit while the whole stays at most 126 pixels wide. The right column starts
+  at x = 194.
+- **Colours.** Shade 1 of the font is drawn in colour 213, shade 2 in 220,
+  with a black (colour 0) outline one pixel all round every pixel.
+- **Window.** Only rows 179 to 422 change. Each line is drawn on its own:
+  its outline never reaches above the line's top, nor left of x = 66.
+- **Fading.** Lines near the edges of the window are drawn darker, by where
+  their top is:
+
+  | Top | Shade 1 | Shade 2 |
+  | --- | --- | --- |
+  | up to 170 | 212 | 211 |
+  | 172 and 173 | 212 | 213 |
+  | 174 to 177 | 212 | 215 |
+  | 178 and 179 | 212 | 217 |
+  | 180 to 409 | 213 | 220 |
+  | 410 and 411 | 211 | 219 |
+  | 412 to 415 | 211 | 217 |
+  | 416 to 419 | 211 | 215 |
+  | 420 and down | 211 | 213 |
+
+- **Timing.** The offset starts at 0 and grows by 2 pixels every third tick
+  of the PC timer (1,193,182 Hz divided by 65,536, about 18.2 ticks a
+  second), so the text moves about 12 pixels a second.
+- **Starting again.** When the last line's top would come above y = 180, the
+  offset goes back to 0, so the credits start again from below the window.
+
+Measured by matching 80 captures of the original against Hegemon's drawing:
+all of them match pixel for pixel, apart from frames that the capture took
+while the original was still drawing them, where a few lines show a colour
+from one step earlier.
 
 ## Which buttons can be used
 
@@ -44,8 +85,8 @@ A or Enter takes it. This uses the original's own highlighted pictures.
 
 ## Still to do
 
-- The credits that scroll up on the left, and the version text at the bottom
-  right; both need the original's fonts.
+- The version text at the bottom right. Which text it is depends on the
+  version Hegemon copies.
 - A few small lights on the right edge of the frame that change over time.
 - The original's mouse pointer: a small gun turret. It is not one of the
   pictures in the LBX archives.

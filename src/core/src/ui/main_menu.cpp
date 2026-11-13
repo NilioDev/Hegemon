@@ -23,7 +23,7 @@ constexpr int kGreyedOut = 2;
 
 MainMenu::MainMenu(GameData& data)
     : background_(Image::parse(data.archive(kArchive).entry(kBackgroundEntry))),
-      panel_(Image::parse(data.archive(kArchive).entry(kPanelEntry))) {
+      panel_(Image::parse(data.archive(kArchive).entry(kPanelEntry))), credits_(data) {
     const auto& archive = data.archive(kArchive);
     for (std::size_t b = 0; b < kButtons; ++b) {
         std::array<Image, 3> states;
@@ -89,6 +89,7 @@ void MainMenu::draw(Canvas& canvas, Palette& palette) const {
     panel_.applyPalette(palette);
     background_.draw(0, canvas);
     panel_.draw(0, canvas);
+    credits_.draw(canvas);
     for (std::size_t b = 0; b < kButtons; ++b) {
         int state = kNormal;
         if (!enabled_[b]) {

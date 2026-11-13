@@ -11,9 +11,10 @@ with gamepad, mouse, keyboard and touch controls.
 
 > [!NOTE]
 > **Status: just started.** Hegemon shows the original's main menu from your
-> files: Continue and Load Game are only usable when you have savegames, as
-> in the original, and the buttons light up under the mouse or the gamepad.
-> Quit Game closes Hegemon; the other buttons don't lead anywhere yet.
+> files, with its scrolling credits. Continue and Load Game are only usable
+> when you have savegames, as in the original, and the buttons light up under
+> the mouse or the gamepad. Quit Game closes Hegemon; the other buttons don't
+> lead anywhere yet.
 
 Hegemon is not affiliated with or endorsed by the makers of the original
 game. It contains none of the original game's files: you need your own copy.

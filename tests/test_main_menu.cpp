@@ -13,13 +13,15 @@ using Choice = hegemon::MainMenu::Choice;
 
 namespace {
 
-// A folder with the menu's archive from the player's files and the given
+// A folder with the menu's archives from the player's files and the given
 // savegames (empty files are enough for the menu).
 fs::path menuFolder(const fs::path& game, std::initializer_list<const char*> saves) {
     const fs::path folder = fs::temp_directory_path() / "hegemon_test_main_menu";
     fs::remove_all(folder);
     fs::create_directories(folder);
-    fs::copy_file(*hegemon::findFileNoCase(game, "MAINMENU.LBX"), folder / "MAINMENU.LBX");
+    for (const char* name : {"MAINMENU.LBX", "FONTS.LBX", "CREDITS.LBX"}) {
+        fs::copy_file(*hegemon::findFileNoCase(game, name), folder / name);
+    }
     for (const char* save : saves) {
         std::ofstream(folder / save) << "x";
     }
