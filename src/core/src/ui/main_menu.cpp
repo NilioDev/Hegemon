@@ -110,8 +110,8 @@ void MainMenu::drawLabel(Canvas& canvas, const Label& label) const {
     }
     const Font& font = credits_.fonts().font(label.font);
     TextStyle style;
-    style.shades[1] = 208;
-    style.shades[2] = 215;
+    style.shades[1] = std::uint8_t{208};
+    style.shades[2] = std::uint8_t{215};
     // Right and centre align on the last pixel column of the text.
     const int width = font.textWidth(label.text, style.spacing) - style.spacing;
     int x = label.x;

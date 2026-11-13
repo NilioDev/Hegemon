@@ -7,6 +7,7 @@ add_library(hgm_core STATIC
     src/ui/new_game.cpp
     src/ui/pointer.cpp
     src/ui/race_select.cpp
+    src/ui/ruler_name.cpp
     src/rules/races.cpp
     src/data/lbx.cpp
     src/data/image.cpp

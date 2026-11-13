@@ -44,7 +44,8 @@ from 293 to 299 breaks the thirteen texts the same way.
   away from the buttons keeps it. When the screen opens, it is the button
   under the pointer.
 - A race is taken when the mouse button is let go over its button. Taking a
-  race opens the ruler's name, and Custom opens the custom race screen.
+  race opens the ruler's name (see [ruler-name.md](ruler-name.md)), and
+  Custom opens the custom race screen.
 - Esc goes back to the New Game screen, with its settings as they were
   accepted.
 
@@ -56,7 +57,5 @@ B goes back.
 
 - Which race is highlighted when the screen opens with the pointer away from
   the buttons. Hegemon takes Alkari.
-- The ruler's name ("Enter Ruler Name", with a suggested name such as Tak
-  Tochno for the Alkari) and the screens after it.
 - The custom race screen.
 - A right click probably shows a help text, as on the New Game screen.

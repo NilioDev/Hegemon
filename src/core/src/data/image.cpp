@@ -148,6 +148,17 @@ void Image::applyPalette(Palette& palette) const {
 }
 
 void Image::draw(std::size_t index, Canvas& canvas, int x, int y) const {
+    static const ColourMap same = [] {
+        ColourMap m{};
+        for (std::size_t i = 0; i < m.size(); ++i) {
+            m[i] = static_cast<std::uint8_t>(i);
+        }
+        return m;
+    }();
+    draw(index, canvas, x, y, same);
+}
+
+void Image::draw(std::size_t index, Canvas& canvas, int x, int y, const ColourMap& colours) const {
     if (index >= frames_.size()) {
         throw FormatError("image frame index out of range");
     }
@@ -159,7 +170,7 @@ void Image::draw(std::size_t index, Canvas& canvas, int x, int y) const {
         for (std::size_t i = 0; i < pixels.size(); ++i) {
             const int cx = x + px + static_cast<int>(i);
             if (cx >= 0 && cx < canvas.width()) {
-                canvas.set(cx, cy, pixels[i]);
+                canvas.set(cx, cy, colours[pixels[i]]);
             }
         }
     };
@@ -172,6 +183,28 @@ void Image::draw(std::size_t index, Canvas& canvas, int x, int y) const {
         return;
     }
     walkFrame(frame, width_, height_, put);
+}
+
+ColourMap nearestColours(const Palette& from, const Palette& to) {
+    // Back to the original's six bits; widen() keeps them in the top bits.
+    const auto six = [](std::uint8_t v) { return v >> 2; };
+    ColourMap out{};
+    for (std::size_t i = 0; i < from.colors.size(); ++i) {
+        const Color& c = from.colors[i];
+        int best = -1;
+        for (std::size_t j = 1; j < to.colors.size(); ++j) {
+            const Color& d = to.colors[j];
+            const int dr = six(c.r) - six(d.r);
+            const int dg = six(c.g) - six(d.g);
+            const int db = six(c.b) - six(d.b);
+            const int dist = dr * dr + dg * dg + db * db;
+            if (best < 0 || dist < best) {
+                best = dist;
+                out[i] = static_cast<std::uint8_t>(j);
+            }
+        }
+    }
+    return out;
 }
 
 } // namespace hegemon

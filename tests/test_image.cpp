@@ -134,6 +134,27 @@ HGM_TEST("Image: palette part and plain rows") {
     HGM_CHECK(rgba[23] == 255);
 }
 
+HGM_TEST("Image: drawn in the nearest colours of another palette") {
+    Palette from;
+    from.colors[1] = {255, 255, 255};
+    from.colors[2] = {0, 0, 0};
+    from.colors[3] = {100, 0, 0};
+    Palette to; // all black but these
+    to.colors[5] = {255, 255, 255};
+    to.colors[7] = {96, 0, 0};
+    to.colors[8] = {104, 0, 0};
+    const auto map = hegemon::nearestColours(from, to);
+    HGM_CHECK(map[1] == 5);
+    HGM_CHECK(map[2] == 1); // black, but never colour 0
+    HGM_CHECK(map[3] == 7); // as near in 6 bits as 8: the lower wins
+
+    std::vector<std::uint8_t> raw = {1, 2, 3, 0};
+    const auto image = Image::parse(makeEntry(2, 2, Image::kFlagRaw, {}, raw));
+    Canvas canvas(2, 2);
+    image.draw(0, canvas, 0, 0, map);
+    HGM_CHECK(canvas.at(0, 0) == 5 && canvas.at(1, 0) == 1 && canvas.at(0, 1) == 7);
+}
+
 HGM_TEST("Image: damaged pictures are refused") {
     // A run past the right edge.
     auto frame = sampleFrame();

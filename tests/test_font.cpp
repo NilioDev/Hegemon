@@ -56,8 +56,8 @@ std::vector<std::uint8_t> makeFonts() {
 
 TextStyle plainStyle() {
     TextStyle style;
-    style.shades[1] = 10;
-    style.shades[2] = 20;
+    style.shades[1] = std::uint8_t{10};
+    style.shades[2] = std::uint8_t{20};
     return style;
 }
 
