@@ -52,6 +52,11 @@ constexpr const char* kList = R"({"patch_version": "test", "parameters": [
   "rows": [["toxic", "radiated", "barren", "desert", "tundra", "ocean", "swamp", "arid", "terran", "gaia"]],
   "default": [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]],
   "columns": [{"name": "bombarded"}, {"name": "hostile"}, {"name": "life_supporting"}, {"name": "lifeless"}]},
+ {"name": "star_special_chance", "type": "integer", "min": 0, "max": 100, "default": 100},
+ {"name": "planet_special_chance", "type": "table", "rows": [], "default": [0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0],
+  "columns": [{"name": "no_special"}, {"name": "wormhole"}, {"name": "space_debris"}, {"name": "pirate_cache"},
+              {"name": "gold_deposits"}, {"name": "gem_deposits"}, {"name": "natives"}, {"name": "splinter_colony"},
+              {"name": "hero"}, {"name": "monster"}, {"name": "ancient_artifacts"}, {"name": "unused?"}]},
  {"name": "climate_chance_old_gal", "type": "table",
   "rows": [["toxic", "radiated", "barren", "desert", "tundra", "ocean", "swamp", "arid", "terran", "gaia"]],
   "default": 0, "columns": [{"name": "bombarded"}, {"name": "hostile"}, {"name": "life_supporting"}, {"name": "lifeless"}]}
@@ -210,6 +215,60 @@ HGM_TEST("Galaxy: a cluster has a large map and a huge galaxy's stars") {
     HGM_CHECK(g.cluster);
     HGM_CHECK(g.width == 1012 && g.height == 800);
     HGM_CHECK(g.stars.size() == 40);
+}
+
+HGM_TEST("Galaxy: special finds, wormholes and monsters") {
+    std::string list = kList;
+    const std::string never = R"("max": 100, "default": 100})";
+    list.replace(list.find(never), never.size(), R"("max": 100, "default": 0})");
+    const Parameters p = Parameters::defaults(list);
+    const GalaxyGenerator gen(p, testNames());
+    Random r(11);
+    auto s = settings(4);
+    s.players[0].picks.values[RacePicks::ArtifactsWorld] = 1;
+    int wormholes = 0, finds = 0;
+    for (int round = 0; round < 20; ++round) {
+        const Galaxy g = gen.generate(s, r);
+        const auto home = [&](int i) {
+            return std::any_of(g.homes.begin(), g.homes.end(), [&](const HomeSystem& h) { return h.star == i; });
+        };
+        HGM_CHECK(g.planets.at(static_cast<std::size_t>(g.homes[0].planet)).special == Special::AncientArtifacts);
+        for (int i = 1; i < static_cast<int>(g.stars.size()); ++i) {
+            const Star& star = g.stars[static_cast<std::size_t>(i)];
+            if (home(i)) {
+                continue;
+            }
+            // Every other star with satellites has a find or a wormhole.
+            HGM_CHECK(star.satellites() == 0 || star.special != Special::None || star.wormhole != -1);
+            if (star.wormhole != -1) {
+                ++wormholes;
+                const Star& end = g.stars.at(static_cast<std::size_t>(star.wormhole));
+                HGM_CHECK(end.wormhole == i);
+                HGM_CHECK(std::hypot(star.x - end.x, star.y - end.y) >= 120.0);
+                HGM_CHECK(star.special == Special::None);
+            }
+            if (star.special != Special::None) {
+                ++finds;
+            }
+        }
+        for (const Planet& q : g.planets) {
+            if (q.special == Special::Natives || q.special == Special::SplinterColony) {
+                HGM_CHECK(q.size >= PlanetSize::Medium);
+                HGM_CHECK(q.climate >= Climate::Desert);
+            }
+            if (q.special != Special::None) {
+                HGM_CHECK(g.stars.at(static_cast<std::size_t>(q.star)).special == q.special);
+            }
+        }
+        HGM_CHECK(!g.monsters.empty() && g.monsters[0].kind == MonsterKind::Guardian && g.monsters[0].star == 0);
+        HGM_CHECK(g.monsters.size() <= 4);
+        for (std::size_t m = 1; m < g.monsters.size(); ++m) {
+            HGM_CHECK(g.monsters[m].kind != MonsterKind::Guardian);
+            HGM_CHECK(g.stars.at(static_cast<std::size_t>(g.monsters[m].star)).special != Special::None);
+        }
+    }
+    HGM_CHECK(wormholes > 0);
+    HGM_CHECK(finds > 0);
 }
 
 HGM_TEST("Galaxy: too many players for the stars") {

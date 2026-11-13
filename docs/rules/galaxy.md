@@ -125,8 +125,58 @@ name i of that list about one time in seven, and otherwise any name: the
 list is mixed by swapping two names picked at random, as many times as
 the list has names, and star i takes name i.
 
+## Special finds
+
+A star other than Orion and the home stars, with at least one satellite,
+may get a special find. `star_special_chance` (64) says "a roll from 0 to
+99 above the value gives a find", 36 in 100; measured, 41 in 100 such
+systems get one in the original, and Hegemon uses that (41/36 of the
+setting's chance). `planet_special_chance` weighs which find (its
+`no_special` and `monster` weights are not used here). A find that has no
+place in the system is rolled again, up to 20 times:
+
+- **wormhole**: the other end is a star of the same kind with no find and
+  no wormhole, far enough away (measured: 125, 120, 150, 210 and 190 for
+  small, medium, large, huge and cluster). Neither end has another find;
+- **space debris, pirate cache, hero**: the system has it, no planet;
+- **gold or gem deposits**: a planet of the system, picked at random;
+- **natives, splinter colony, ancient artifacts**: a planet whose climate is
+  desert or better. Its climate then is (measured, in percent) desert 16,
+  tundra 18, ocean 7, swamp 12, arid 8, terran 25, gaia 13. Natives and
+  splinter colonies make a tiny or small planet medium, large or huge.
+
+Measured with the default weights, natives, splinter colonies and ancient
+artifacts come out much rarer than their weights (9, 4, 5) say, because
+few systems have a planet good enough; wormholes come out a little more
+often.
+
+A race with Artifacts Home World has ancient artifacts on its home world.
+
+## Monsters
+
+The Guardian guards Orion. Other monsters guard systems that have a find
+and a planet, each such system with a chance of 24 in 100 (measured), at
+most 1, 3, 5, 7 and 7 systems for small, medium, large, huge and cluster.
+Which monster depends on the find (measured counts):
+
+| Find | Amoeba | Crystal | Dragon | Eel | Hydra |
+|---|---|---|---|---|---|
+| Space debris | 2 | 1 | 0 | 0 | 5 |
+| Pirate cache | 4 | 0 | 4 | 0 | 5 |
+| Gold deposits | 3 | 2 | 0 | 17 | 5 |
+| Gem deposits | 4 | 0 | 5 | 9 | 3 |
+| Natives | 3 | 6 | 19 | 0 | 13 |
+| Splinter colony | 6 | 5 | 0 | 7 | 4 |
+| Hero | 7 | 1 | 5 | 0 | 4 |
+| Ancient artifacts | 3 | 7 | 5 | 0 | 9 |
+
+A guarded system's planets are better (measured: three in four rich or
+ultra rich, nearly two in three large or huge, one in three terran or
+gaia; gravity stays as it was). Hegemon makes each planet rich or ultra
+rich with a chance of 65 in 100, large or huge with 50 and terran or gaia
+with 30.
+
 ## Still to do
 
-Wormholes, nebulae, monsters, the special finds of star systems and
-planets (`star_special_chance`, `planet_special_chance`), the Antarans
-and the fan patch's map switches (`mapgen` table).
+Nebulae (and black holes in them), the Antarans, and the fan patch's map
+switches (`mapgen` table).
