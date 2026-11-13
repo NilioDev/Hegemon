@@ -26,6 +26,11 @@ public:
     // Draws from now on with the pointers of `entry` (1 to 13) of FONTS.LBX.
     // Throws FormatError when it is damaged.
     void useEntry(std::size_t entry);
+    // Which of the entry's twenty pictures is drawn: 0, the usual one, or
+    // another such as 6, shown while the galaxy is made.
+    void usePicture(std::size_t picture) { picture_ = picture; }
+    static constexpr std::size_t kUsual = 0;
+    static constexpr std::size_t kBusy = 6;
 
     // The mouse moved to (x, y) on the 640×480 screen; this also shows the
     // pointer again.
@@ -45,6 +50,7 @@ private:
     GameData* data_;
     std::map<std::size_t, PointerSet> sets_;
     const PointerSet* pointers_ = nullptr;
+    std::size_t picture_ = kUsual;
     int x_ = 320, y_ = 240; // the original starts it mid-screen
     bool visible_ = true;
 };

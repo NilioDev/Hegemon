@@ -25,3 +25,11 @@ that of the right column. Either may be empty.
 each with a single record of 100 bytes. Entry 156 is "Enter Ruler Name"
 (entry 161 holds the same text). The other languages' files have not been
 looked at yet.
+
+## Lists of texts
+
+`HESTRNGS.LBX` has one entry with a single record of 13521 bytes. That record
+holds about 400 texts, each ending at a zero byte, numbered from 0 in their
+order. Text 242 is "Generating Universe ..." and text 161 is "Placing home
+worlds ...". Hegemon refuses such a list when the record runs past the end
+of the entry. The zeros after the last text don't count as texts.

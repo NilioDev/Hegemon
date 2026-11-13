@@ -54,5 +54,7 @@ see-through. The entries draw the same pointers in different colours, and
 each screen takes the one that suits its palette: the main menu picture 0
 of entry 6 (see [../rules/main-menu.md](../rules/main-menu.md)), the New
 Game screen picture 0 of entry 10 (see
-[../rules/new-game.md](../rules/new-game.md)). Hegemon refuses an entry that
+[../rules/new-game.md](../rules/new-game.md)). Picture 0 is the usual
+pointer; picture 6 is shown while the galaxy is made (see
+[../rules/banner.md](../rules/banner.md)). Hegemon refuses an entry that
 is too short for all 20 pictures.

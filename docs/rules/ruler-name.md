@@ -47,8 +47,8 @@ time it opens.
 - Backspace takes the last character away. The name may be left empty; the
   original then goes on all the same.
 - Enter, or letting go of the mouse button over Accept, takes the name and
-  opens the banner colours. The Accept button doesn't change while it is
-  held.
+  opens the banner colours (see [banner.md](banner.md)). The Accept button
+  doesn't change while it is held.
 - Esc goes back to the race selection. Esc on the banner colours comes back
   to this dialog with a new name.
 
@@ -62,5 +62,3 @@ systems with an on-screen keyboard it opens with the dialog.
   They may have been keys DOSBox lost; the rule fits every repeated test.
 - What the original does with an empty name later in the game.
 - What frame 1 of `INBOX.LBX` entry 1, a lit Accept, is for.
-- The banner colours (entries 34 to 137 of `RACESEL.LBX`) and the screens
-  after them.
