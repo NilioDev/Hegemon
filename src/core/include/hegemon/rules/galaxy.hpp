@@ -65,6 +65,15 @@ struct Star {
     int satellites() const;
 };
 
+enum class MonsterKind : std::uint8_t { Guardian, Amoeba, Crystal, Dragon, Eel, Hydra };
+
+// A space monster guarding a star system: the Guardian at Orion, the others
+// at systems with a special find.
+struct Monster {
+    MonsterKind kind = MonsterKind::Hydra;
+    int star = 0;
+};
+
 // Where a player starts.
 struct HomeSystem {
     int race = 0; // one of the stock races
@@ -78,6 +87,7 @@ struct Galaxy {
     std::vector<Star> stars; // Orion first, unless it was left out
     std::vector<Planet> planets;
     std::vector<HomeSystem> homes; // one per player, the human first
+    std::vector<Monster> monsters;
 };
 
 } // namespace hegemon

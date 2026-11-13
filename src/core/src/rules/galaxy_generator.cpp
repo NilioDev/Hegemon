@@ -50,6 +50,9 @@ constexpr std::array<std::string_view, kClimates> kClimateNames = {
     "toxic", "radiated", "barren", "desert", "tundra", "ocean", "swamp", "arid", "terran", "gaia"};
 constexpr std::array<std::string_view, 4> kClimateGroupNames = {"bombarded", "hostile", "life_supporting",
                                                                 "lifeless"};
+constexpr std::array<std::string_view, 11> kSpecialNames = {
+    "no_special", "wormhole", "space_debris", "pirate_cache", "gold_deposits", "gem_deposits",
+    "natives",    "splinter_colony", "hero", "monster", "ancient_artifacts"};
 constexpr std::array<std::string_view, 4> kMapSizeNames = {"small", "medium", "large", "huge"};
 
 // How many satellites home systems have, in percent for 0 to 5, measured.
@@ -60,6 +63,26 @@ constexpr std::array<std::int64_t, kStarColours> kHomeColour = {1, 15, 18, 22, 4
 // asteroid belt half of the time.
 constexpr std::array<std::int64_t, kOrbits> kOrionOrbit = {0, 0, 8, 20, 12};
 constexpr int kOrionBeltPercent = 50;
+// The chance that a system with a special find is guarded (measured).
+constexpr int kGuardPercent = 24;
+// Which monster guards a system, by its special find (measured counts for
+// the amoeba, crystal, dragon, eel and hydra).
+constexpr std::array<std::array<std::int64_t, 5>, 11> kGuardKind = {{
+    {0, 0, 0, 0, 0},  // none
+    {0, 0, 0, 0, 0},  // wormhole
+    {2, 1, 0, 0, 5},  // space debris
+    {4, 0, 4, 0, 5},  // pirate cache
+    {3, 2, 0, 17, 5}, // gold deposits
+    {4, 0, 5, 9, 3},  // gem deposits
+    {3, 6, 19, 0, 13}, // natives
+    {6, 5, 0, 7, 4},  // splinter colony
+    {7, 1, 5, 0, 4},  // hero
+    {0, 0, 0, 0, 0},  // monster
+    {3, 7, 5, 0, 9},  // ancient artifacts
+}};
+// The climates natives, splinter colonies and ancient artifacts have, in
+// percent from desert to gaia (measured).
+constexpr std::array<std::int64_t, 7> kLivelyClimate = {16, 18, 7, 12, 8, 25, 13};
 // Home systems have at least this many planets (the fan patch's /planets
 // switch, whose default is 3).
 constexpr int kDefaultHomePlanets = 3;
@@ -70,18 +93,21 @@ class Maker {
 public:
     // Measured for the four map sizes of the fan patch's tables (small,
     // medium, large, huge) and for a cluster galaxy: where stars may lie, how close two may come and
-    // how far apart home stars are.
+    // how far apart home stars and the ends of a wormhole are and how many
+    // systems monsters guard.
     struct Layout {
         int left, top, right, bottom; // the margins
         int apartX, apartY;           // no two stars closer in both
         double homesApart;
+        double wormholeApart; // the ends of a wormhole at least
+        int monsters;         // guarded systems at most
     };
     static constexpr std::array<Layout, 5> kLayout = {{
-        {24, 23, 18, 26, 57, 50, 129.0},
-        {31, 31, 38, 38, 60, 74, 290.0},
-        {42, 42, 43, 47, 75, 71, 430.0},
-        {63, 66, 54, 64, 90, 88, 651.0},
-        {31, 33, 28, 39, 60, 74, 430.0}, // cluster
+        {24, 23, 18, 26, 57, 50, 129.0, 125.0, 1},
+        {31, 31, 38, 38, 60, 74, 290.0, 120.0, 3},
+        {42, 42, 43, 47, 75, 71, 430.0, 150.0, 5},
+        {63, 66, 54, 64, 90, 88, 651.0, 210.0, 7},
+        {31, 33, 28, 39, 60, 74, 430.0, 190.0, 7}, // cluster
     }};
     // How often Orion is the nearest star to the middle of the home stars,
     // the second nearest and so on (measured).
@@ -138,6 +164,8 @@ public:
             if (place(count) && chooseHomes(apart)) {
                 chooseOrion();
                 fill();
+                specials();
+                monsters();
                 name();
                 return std::move(g_);
             }
@@ -455,6 +483,10 @@ private:
                                                          : Gravity::Normal;
         p.climate = picks[RacePicks::Aquatic] != 0 ? Climate::Ocean : Climate::Terran;
         p.special = Special::None;
+        if (picks[RacePicks::ArtifactsWorld] != 0) {
+            p.special = Special::AncientArtifacts;
+            s.special = Special::AncientArtifacts;
+        }
         // Measured: no other planet of a home system is Terran.
         for (const int o : planets) {
             Planet& q = g_.planets[static_cast<std::size_t>(o)];
@@ -465,6 +497,156 @@ private:
                     0, 3));
                 for (int k = 0; k < 100 && q.climate == Climate::Terran; ++k) {
                     q.climate = rollClimate(group);
+                }
+            }
+        }
+    }
+
+
+    bool isHome(int star) const {
+        return std::any_of(g_.homes.begin(), g_.homes.end(), [&](const HomeSystem& h) { return h.star == star; });
+    }
+
+    // Special finds: a star other than Orion and the home stars, with
+    // satellites, gets one when a roll from 0 to 99 is at least
+    // star_special_chance; planet_special_chance weighs which. A find that
+    // has no place there is rolled again.
+    void specials() {
+        const auto threshold = p_.integer("star_special_chance");
+        std::array<std::int64_t, kSpecialNames.size()> w{};
+        for (std::size_t i = 1; i < kSpecialNames.size(); ++i) {
+            w[i] = p_.integer("planet_special_chance", {}, kSpecialNames[i]);
+        }
+        w[static_cast<std::size_t>(Special::Monster)] = 0; // monsters come after
+        for (int i = 1; i < static_cast<int>(g_.stars.size()); ++i) {
+            Star& s = g_.stars[static_cast<std::size_t>(i)];
+            if (isHome(i) || s.satellites() == 0 || s.special != Special::None || s.wormhole != -1) {
+                continue;
+            }
+            // Measured: at the default 64, 41 in 100 such systems get a find
+            // in the original, more than the 36 the setting says.
+            if (static_cast<std::int64_t>(r_.below(100 * 36)) >= (100 - threshold) * 41) {
+                continue;
+            }
+            for (int tries = 0; tries < 20; ++tries) {
+                const auto pick = r_.pick(w);
+                if (!pick || placeSpecial(i, static_cast<Special>(*pick))) {
+                    break;
+                }
+            }
+        }
+    }
+
+    bool placeSpecial(int star, Special special) {
+        Star& s = g_.stars[static_cast<std::size_t>(star)];
+        switch (special) {
+        case Special::Wormhole: {
+            std::vector<int> ends;
+            for (int j = 1; j < static_cast<int>(g_.stars.size()); ++j) {
+                const Star& t = g_.stars[static_cast<std::size_t>(j)];
+                if (j != star && !isHome(j) && t.satellites() > 0 && t.special == Special::None && t.wormhole == -1 &&
+                    distance(star, j) >= kLayout[layout_].wormholeApart) {
+                    ends.push_back(j);
+                }
+            }
+            if (ends.empty()) {
+                return false;
+            }
+            const int end = ends[r_.below(static_cast<std::uint32_t>(ends.size()))];
+            s.wormhole = end;
+            g_.stars[static_cast<std::size_t>(end)].wormhole = star;
+            return true;
+        }
+        case Special::SpaceDebris:
+        case Special::PirateCache:
+        case Special::Hero:
+            s.special = special;
+            return true;
+        case Special::GoldDeposits:
+        case Special::GemDeposits:
+        case Special::Natives:
+        case Special::SplinterColony:
+        case Special::AncientArtifacts: {
+            const bool lively = special == Special::Natives || special == Special::SplinterColony ||
+                                special == Special::AncientArtifacts;
+            std::vector<int> planets;
+            for (const int o : s.orbits) {
+                if (o == kNoPlanet) {
+                    continue;
+                }
+                const Planet& q = g_.planets[static_cast<std::size_t>(o)];
+                if (q.type == SatelliteType::Planet && (!lively || q.climate >= Climate::Desert)) {
+                    planets.push_back(o);
+                }
+            }
+            if (planets.empty()) {
+                return false;
+            }
+            Planet& q = g_.planets[static_cast<std::size_t>(planets[r_.below(static_cast<std::uint32_t>(planets.size()))])];
+            q.special = special;
+            s.special = special;
+            if (lively) {
+                q.climate = static_cast<Climate>(static_cast<std::size_t>(Climate::Desert) + r_.pick(kLivelyClimate).value_or(0));
+            }
+            if ((special == Special::Natives || special == Special::SplinterColony) && q.size < PlanetSize::Medium) {
+                q.size = static_cast<PlanetSize>(r_.between(2, 4));
+                q.gravity = gravity(q.minerals, q.size);
+            }
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
+    // The Guardian at Orion; other monsters guard some systems with a find
+    // and make their planets better.
+    void monsters() {
+        if (!g_.stars.empty() && g_.stars[0].special == Special::Orion) {
+            g_.monsters.push_back({MonsterKind::Guardian, 0});
+        }
+        std::vector<int> found;
+        for (int i = 1; i < static_cast<int>(g_.stars.size()); ++i) {
+            const Special sp = g_.stars[static_cast<std::size_t>(i)].special;
+            const Star& s = g_.stars[static_cast<std::size_t>(i)];
+            const bool planet = std::any_of(s.orbits.begin(), s.orbits.end(), [&](int o) {
+                return o != kNoPlanet && g_.planets[static_cast<std::size_t>(o)].type == SatelliteType::Planet;
+            });
+            if (sp != Special::None && !isHome(i) && planet) {
+                found.push_back(i);
+            }
+        }
+        int guarded = 0;
+        for (const int i : found) {
+            if (guarded >= kLayout[layout_].monsters || !r_.chance(kGuardPercent)) {
+                continue;
+            }
+            Star& s = g_.stars[static_cast<std::size_t>(i)];
+            const auto kind = r_.pick(kGuardKind[static_cast<std::size_t>(s.special)]);
+            if (!kind) {
+                continue;
+            }
+            g_.monsters.push_back({static_cast<MonsterKind>(*kind + 1), i});
+            ++guarded;
+            for (const int o : s.orbits) {
+                if (o == kNoPlanet) {
+                    continue;
+                }
+                Planet& q = g_.planets[static_cast<std::size_t>(o)];
+                if (q.type != SatelliteType::Planet) {
+                    continue;
+                }
+                // Measured: three in four planets of a guarded system are
+                // rich or ultra rich, nearly two in three large or huge and
+                // one in three terran or gaia; gravity stays.
+                if (q.minerals < Minerals::Rich && r_.chance(65)) {
+                    q.minerals = r_.below(2) == 0 ? Minerals::Rich : Minerals::UltraRich;
+                }
+                if (q.size < PlanetSize::Large && r_.chance(50)) {
+                    q.size = r_.below(2) == 0 ? PlanetSize::Large : PlanetSize::Huge;
+                }
+                if (q.climate < Climate::Terran && r_.chance(30)) {
+                    q.climate = r_.below(2) == 0 ? Climate::Terran : Climate::Gaia;
                 }
             }
         }
