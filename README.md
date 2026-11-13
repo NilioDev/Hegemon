@@ -16,8 +16,10 @@ gamepad, mouse, keyboard and touch controls.
 > mouse pointer. A click or a key skips the opening. New Game opens the New
 > Game screen, where you can pick the difficulty, galaxy, players and the
 > other settings, and Accept leads to choosing your race, entering your
-> ruler's name and choosing your banner colour. Making the galaxy comes
-> next; until then Esc there goes back to the main menu. Continue and Load Game are
+> ruler's name and choosing your banner colour. Hegemon then makes a new
+> galaxy the way the fan patch does and shows it on the galaxy map, where you
+> name your home star. Playing the game itself comes next; until then Esc on
+> the galaxy map goes back to the main menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
 > light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,
 > Multi Player and Hall of Fame don't lead anywhere yet.
@@ -63,6 +65,8 @@ what is missing.
 | Choose a race | Point and click | Enter clicks where the pointer is, Esc goes back | D-pad or left stick, then A; B goes back |
 | Enter your ruler's name | Accept | Type, Backspace, Enter; Esc goes back | A takes the offered name; B goes back |
 | Choose your banner colour | Click a banner | Enter clicks where the pointer is, Esc goes back | D-pad, then A; B goes back |
+| Name your home star | Accept | Type, Backspace, Enter | A takes the offered name |
+| Leave the galaxy map (for now) | | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |
 

@@ -6,7 +6,7 @@
 
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
-#include "hegemon/ui/pit_timer.hpp"
+#include "hegemon/ui/name_box.hpp"
 #include "hegemon/ui/rect.hpp"
 
 #include <cstddef>
@@ -35,10 +35,8 @@ private:
 
 class RulerNameDialog {
 public:
-    // A name takes at most 19 characters, and a key adds one only while the
-    // name is narrower than 100 pixels.
-    static constexpr std::size_t kMaxLength = 19;
-    static constexpr int kMaxWidth = 100;
+    static constexpr std::size_t kMaxLength = NameBox::kMaxLength;
+    static constexpr int kMaxWidth = NameBox::kMaxWidth;
     // The pointers in the race selection's colours: entry 10 of FONTS.LBX.
     static constexpr std::size_t kPointerEntry = 10;
 
@@ -48,38 +46,28 @@ public:
     // damaged.
     RulerNameDialog(GameData& data, std::size_t race, std::string name);
 
-    const std::string& name() const { return name_; }
+    const std::string& name() const { return box_.name(); }
 
-    // The keyboard: a key adds its character when the font has it and the
-    // name has room; Backspace takes the last one away.
-    bool type(char c);
-    void backspace();
+    bool type(char c) { return box_.type(c); }
+    void backspace() { box_.backspace(); }
 
-    // The mouse: Accept takes the name when the mouse button is let go over
-    // it.
-    Rect acceptRect() const;
-    void press(int x, int y);
-    bool release(int x, int y);
-    bool click(int x, int y);
+    Rect acceptRect() const { return box_.acceptRect(); }
+    void press(int x, int y) { box_.press(x, y); }
+    bool release(int x, int y) { return box_.release(x, y); }
+    bool click(int x, int y) { return box_.click(x, y); }
 
-    // Lets `ms` milliseconds pass: the cursor after the name blinks.
-    void tick(std::uint64_t ms);
-    bool cursorShown() const { return cursorShown_; }
+    void tick(std::uint64_t ms) { box_.tick(ms); }
+    bool cursorShown() const { return box_.cursorShown(); }
 
     // Draws the whole screen and sets the colours it is drawn with.
     void draw(Canvas& canvas, Palette& palette) const;
 
 private:
+    static std::string title(GameData& data);
+
     Image background_;
-    Image dialog_;
-    Palette palette_;   // the screen's colours
-    ColourMap colours_; // the dialog's colours in the screen's
-    FontSet fonts_;
-    std::string title_;
-    std::string name_;
-    PitTimer timer_;
-    bool cursorShown_ = true;
-    bool held_ = false;
+    Palette palette_; // the screen's colours
+    NameBox box_;
 };
 
 } // namespace hegemon

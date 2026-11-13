@@ -57,6 +57,7 @@ struct Star {
     std::string name;
     int x = 0, y = 0; // on the galaxy map, in its own units
     StarColour colour = StarColour::Yellow;
+    int size = 1; // how big the galaxy map draws it, 0 to 2
     Special special = Special::None;
     int wormhole = -1; // the star at the other end, or -1
     bool inNebula = false;
@@ -89,6 +90,7 @@ struct HomeSystem {
 
 struct Galaxy {
     int width = 0, height = 0;
+    int mapSize = 1; // the row of map_generation: 0 small, 1 medium, 2 large, 3 huge
     bool cluster = false;
     std::vector<Star> stars; // Orion first, unless it was left out
     std::vector<Planet> planets;

@@ -94,6 +94,8 @@ constexpr std::array<std::int64_t, 7> kLivelyClimate = {16, 18, 7, 12, 8, 25, 13
 // Map units in a parsec: warp_interdictor_range says 8100 is 3 parsecs
 // squared, so 90 units are 3 parsecs.
 constexpr double kParsec = 30.0;
+// Stars come in three sizes on the galaxy map, equally often (measured).
+constexpr std::uint32_t kStarSizes = 3;
 // /monsters at this leaves the number of monsters to chance.
 constexpr std::int64_t kRandomMonsters = 255;
 // Every home system of a race that eats has a planet that grows food
@@ -166,6 +168,7 @@ public:
         g_.width = static_cast<int>(p_.integer("map_generation", {map}, "width"));
         g_.height = static_cast<int>(p_.integer("map_generation", {map}, "height"));
         g_.cluster = s_.size == NewGameSettings::GalaxySize::Cluster;
+        g_.mapSize = static_cast<int>(map_);
         const auto count = static_cast<std::size_t>(p_.integer("stars_in_galaxy", {}, kMapSizeNames[stars_]));
         if (count < s_.players.size() + 1) {
             throw std::runtime_error("galaxy: fewer stars than players");
@@ -254,6 +257,7 @@ private:
             Star s;
             s.x = bx;
             s.y = by;
+            s.size = static_cast<int>(r_.below(kStarSizes));
             g_.stars.push_back(s);
         }
         return true;

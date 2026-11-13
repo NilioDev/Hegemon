@@ -17,10 +17,14 @@
 #include "hegemon/ui/main_menu.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
+#include "hegemon/rules/galaxy_generator.hpp"
+#include "hegemon/rules/random.hpp"
+#include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/race_select.hpp"
 #include "hegemon/ui/ruler_name.hpp"
 #include "hegemon/version.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -49,6 +53,11 @@ struct App {
     std::size_t race = 0;                                  // the stock race taken
     std::unique_ptr<hegemon::BannerSelectScreen> banners;  // after the ruler's name
     std::unique_ptr<hegemon::GeneratingScreen> generating; // after the banner
+    std::size_t banner = 0;                                // the banner colour taken
+    bool shownGenerating = false; // the message is on the screen: make the galaxy
+    std::unique_ptr<hegemon::Galaxy> galaxy;
+    std::unique_ptr<hegemon::GalaxyMap> map;
+    std::unique_ptr<hegemon::NameBox> homeName; // over the map at first
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -319,29 +328,149 @@ void leaveBanners(App& app) {
 }
 
 void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
-    SDL_Log("Banner colour %zu taken. Making the galaxy is not there yet; Esc goes back to the main menu.",
-            static_cast<std::size_t>(colour));
+    app.banner = static_cast<std::size_t>(colour);
     try {
         app.generating = std::make_unique<hegemon::GeneratingScreen>(*app.data);
+        app.shownGenerating = false;
         app.pointer->usePicture(hegemon::Pointer::kBusy);
     } catch (const hegemon::FormatError& e) {
         SDL_Log("The message could not be read: %s", e.what());
     }
 }
 
-// For now the galaxy isn't made: Esc or B goes back to the main menu.
-SDL_AppResult generatingEvent(App& app, SDL_Event* event) {
-    const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
-                      (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
-    if (back) {
+// Back to the main menu, leaving the new game.
+void backToMainMenu(App& app) {
+    SDL_StopTextInput(app.window);
+    app.homeName.reset();
+    app.map.reset();
+    app.galaxy.reset();
+    app.generating.reset();
+    app.banners.reset();
+    app.rulerName.reset();
+    app.raceSelect.reset();
+    app.pointer->usePicture(hegemon::Pointer::kUsual);
+    app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
+    app.menu->reopen();
+    app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
+}
+
+// Makes the galaxy for the New Game settings: the human with the race and
+// banner taken, the computer players with other stock races and banners at
+// random. Then the galaxy map, asking for the home star's name.
+void makeGalaxy(App& app) {
+    try {
+        hegemon::GalaxySettings settings;
+        settings.size = app.settings.galaxySize;
+        settings.age = app.settings.galaxyAge;
+        int players = app.settings.players;
+        if (players == hegemon::NewGameSettings::kRandomPlayers) {
+            std::uniform_int_distribution<int> pick(hegemon::NewGameSettings::kMinPlayers,
+                                                    hegemon::NewGameSettings::kMaxPlayers);
+            players = pick(app.random);
+        }
+        std::vector<std::size_t> races, banners;
+        for (std::size_t r = 0; r < hegemon::Races::kStockRaces; ++r) {
+            if (r != app.race) {
+                races.push_back(r);
+            }
+        }
+        for (std::size_t b = 0; b < hegemon::BannerSelectScreen::kBanners; ++b) {
+            if (b != app.banner) {
+                banners.push_back(b);
+            }
+        }
+        std::shuffle(races.begin(), races.end(), app.random);
+        std::shuffle(banners.begin(), banners.end(), app.random);
+        races.insert(races.begin(), app.race);
+        banners.insert(banners.begin(), app.banner);
+        races.resize(static_cast<std::size_t>(players));
+        banners.resize(static_cast<std::size_t>(players));
+        for (const std::size_t race : races) {
+            settings.players.push_back({static_cast<int>(race), app.races->stock(race)});
+        }
+        const hegemon::GalaxyGenerator generator(app.data->parameters(), hegemon::StarNames::load(*app.data),
+                                                 hegemon::loadNebulae(*app.data));
+        hegemon::Random random(app.random());
+        app.galaxy = std::make_unique<hegemon::Galaxy>(generator.generate(settings, random));
+        app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, *app.galaxy, banners);
+        const auto& home = app.galaxy->stars.at(static_cast<std::size_t>(app.galaxy->homes.at(0).star));
+        app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
         app.generating.reset();
         app.banners.reset();
         app.rulerName.reset();
         app.raceSelect.reset();
         app.pointer->usePicture(hegemon::Pointer::kUsual);
-        app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
-        app.menu->reopen();
-        app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
+        app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+        SDL_StartTextInput(app.window);
+    } catch (const std::exception& e) {
+        SDL_Log("The galaxy could not be made: %s", e.what());
+        backToMainMenu(app);
+    }
+}
+
+// While the galaxy is being made, Esc or B goes back to the main menu.
+SDL_AppResult generatingEvent(App& app, SDL_Event* event) {
+    const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
+                      (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
+    if (back) {
+        backToMainMenu(app);
+    }
+    return SDL_APP_CONTINUE;
+}
+
+void acceptHomeName(App& app) {
+    auto& home = app.galaxy->stars.at(static_cast<std::size_t>(app.galaxy->homes.at(0).star));
+    if (!app.homeName->name().empty()) {
+        home.name = app.homeName->name();
+    }
+    app.homeName.reset();
+    SDL_StopTextInput(app.window);
+}
+
+// The galaxy map. For now only the home star's name can be given; Esc or B
+// goes back to the main menu.
+SDL_AppResult mapEvent(App& app, SDL_Event* event) {
+    if (app.homeName) {
+        auto& box = *app.homeName;
+        switch (event->type) {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            }
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event->button.button == SDL_BUTTON_LEFT &&
+                box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                acceptHomeName(app);
+            }
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_TEXT_INPUT:
+            for (const char* c = event->text.text; *c != '\0'; ++c) {
+                if (static_cast<unsigned char>(*c) < 0x80) { // the font has no others
+                    box.type(*c);
+                }
+            }
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_KEY_DOWN:
+            if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+                acceptHomeName(app);
+            } else if (event->key.key == SDLK_BACKSPACE) {
+                box.backspace();
+            }
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+                acceptHomeName(app);
+            }
+            return SDL_APP_CONTINUE;
+        default:
+            return SDL_APP_CONTINUE;
+        }
+    }
+    const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
+                      (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
+    if (back) {
+        backToMainMenu(app);
     }
     return SDL_APP_CONTINUE;
 }
@@ -633,6 +762,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     default:
         break;
     }
+    if (app->map) {
+        return mapEvent(*app, event);
+    }
     if (app->generating) {
         return generatingEvent(*app, event);
     }
@@ -656,8 +788,19 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->generating) {
-            app->generating->draw(app->canvas, app->palette);
+        if (app->map) {
+            app->map->draw(app->canvas, app->palette);
+            if (app->homeName) {
+                app->homeName->tick(elapsed);
+                app->homeName->draw(app->canvas);
+            }
+        } else if (app->generating) {
+            if (app->shownGenerating) {
+                makeGalaxy(*app);
+            } else {
+                app->generating->draw(app->canvas, app->palette);
+                app->shownGenerating = true;
+            }
         } else if (app->banners) {
             app->banners->draw(app->canvas, app->palette);
         } else if (app->rulerName) {
