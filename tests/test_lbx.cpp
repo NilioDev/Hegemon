@@ -89,7 +89,7 @@ HGM_TEST("LBX: damaged headers are refused") {
 
 // With the player's files in gamedata/: every archive of the original opens,
 // and the files that are videos are recognised as not being archives.
-HGM_TEST("LBX: every archive of the original opens") {
+HGM_TEST("LBX: every archive of the original and the fan patch opens") {
     const std::filesystem::path folder = HEGEMON_GAMEDATA_DIR;
     if (!hegemon::isGameFolder(folder)) {
         HGM_SKIP("original game files not in gamedata/");
@@ -97,7 +97,11 @@ HGM_TEST("LBX: every archive of the original opens") {
     std::size_t archives = 0;
     std::size_t entries = 0;
     std::size_t videos = 0;
-    for (const auto& file : std::filesystem::directory_iterator(folder)) {
+    // The fan patch keeps its own archives in folders below the game's.
+    for (const auto& file : std::filesystem::recursive_directory_iterator(folder)) {
+        if (!file.is_regular_file()) {
+            continue;
+        }
         auto ext = file.path().extension().string();
         for (auto& c : ext) {
             c = static_cast<char>(c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c);

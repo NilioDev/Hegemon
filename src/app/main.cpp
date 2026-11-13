@@ -106,7 +106,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     if (folder && hegemon::isGameFolder(*folder)) {
         try {
             app->data = std::make_unique<hegemon::GameData>(*folder);
-            app->menu = std::make_unique<hegemon::MainMenu>(*app->data);
+            if (app->data->config() == nullptr) {
+                // Like the patched original, which won't start without its
+                // settings.
+                app->lines.push_back("Hegemon plays the game with the fan patch 1.51.");
+                app->lines.push_back("Install it from moo2mod.com in your game folder");
+                app->lines.push_back("and start Hegemon again.");
+            } else {
+                app->menu = std::make_unique<hegemon::MainMenu>(*app->data);
+            }
         } catch (const hegemon::FormatError& e) {
             app->menu.reset();
             app->lines.push_back(std::string("Your game files could not be read: ") + e.what());

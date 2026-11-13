@@ -10,6 +10,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace hegemon {
@@ -51,9 +52,20 @@ public:
     };
     Rect buttonRect(std::size_t i) const;
 
+    // A text on the screen, placed by the fan patch's `format` setting.
+    struct Label {
+        std::string text;
+        std::size_t font = 0;
+        char align = 'l'; // l, r or c
+        int x = 0, y = 0;
+    };
+    const Label& versionLabel() const { return version_; }
+    const Label& modNameLabel() const { return modName_; }
+
 private:
     static std::size_t index(Choice c) { return static_cast<std::size_t>(c); }
     std::optional<std::size_t> buttonAt(int x, int y) const;
+    void drawLabel(Canvas& canvas, const Label& label) const;
 
     Image background_;
     Image panel_;
@@ -62,6 +74,8 @@ private:
     std::vector<std::array<Image, 3>> buttons_;
     std::array<bool, kButtons> enabled_{};
     std::optional<Choice> highlighted_;
+    Label version_;
+    Label modName_;
 };
 
 } // namespace hegemon
