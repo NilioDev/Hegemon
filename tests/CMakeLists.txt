@@ -8,6 +8,7 @@ add_executable(hgm_tests
     test_races.cpp
     test_race_select.cpp
     test_ruler_name.cpp
+    test_galaxy_map.cpp
     test_banner_select.cpp
     test_parameters.cpp
     test_font.cpp
