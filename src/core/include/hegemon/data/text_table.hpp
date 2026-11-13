@@ -24,4 +24,9 @@ private:
     std::vector<std::string> records_;
 };
 
+// An entry whose one record holds many texts, each ending at a zero byte,
+// such as the messages of HESTRNGS.LBX. Throws FormatError when the record
+// runs past the end of the entry.
+std::vector<std::string> parseStringList(std::span<const std::uint8_t> entry);
+
 } // namespace hegemon

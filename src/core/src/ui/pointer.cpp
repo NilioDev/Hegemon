@@ -5,13 +5,6 @@
 
 namespace hegemon {
 
-namespace {
-
-// The arrow-like turret, the first picture of an entry.
-constexpr std::size_t kPointer = 0;
-
-} // namespace
-
 Pointer::Pointer(GameData& data) : data_(&data) {
     useEntry(kMainMenuEntry);
 }
@@ -32,7 +25,7 @@ void Pointer::move(int x, int y) {
 
 void Pointer::draw(Canvas& canvas) const {
     if (visible_) {
-        pointers_->draw(kPointer, canvas, x_, y_);
+        pointers_->draw(picture_, canvas, x_, y_);
     }
 }
 

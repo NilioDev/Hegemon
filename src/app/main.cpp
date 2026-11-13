@@ -3,7 +3,8 @@
 // The Hegemon app: opens a window, turns mouse, keyboard and gamepad input
 // into commands for the current screen, and shows the 640×480 picture the
 // core draws, scaled sharply to the window. For now the screens are the
-// main menu, the New Game screen, the race selection and the ruler's name.
+// main menu, the New Game screen, the race selection, the ruler's name and
+// the banner colours.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -12,6 +13,7 @@
 #include "hegemon/data/reader.hpp"
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
+#include "hegemon/ui/banner_select.hpp"
 #include "hegemon/ui/main_menu.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
@@ -44,6 +46,9 @@ struct App {
     std::unique_ptr<hegemon::RaceSelectScreen> raceSelect; // while it is shown
     std::unique_ptr<hegemon::RulerNames> rulerNames;
     std::unique_ptr<hegemon::RulerNameDialog> rulerName; // over the race selection
+    std::size_t race = 0;                                  // the stock race taken
+    std::unique_ptr<hegemon::BannerSelectScreen> banners;  // after the ruler's name
+    std::unique_ptr<hegemon::GeneratingScreen> generating; // after the banner
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -280,6 +285,7 @@ void chooseRace(App& app, std::size_t button) {
             app.rulerNames = std::make_unique<hegemon::RulerNames>(*app.data);
         }
         std::uniform_int_distribution<std::size_t> pick(0, hegemon::RulerNames::kPerRace - 1);
+        app.race = button;
         app.rulerName = std::make_unique<hegemon::RulerNameDialog>(*app.data, button,
                                                                    app.rulerNames->name(button, pick(app.random)));
         app.pointer->useEntry(hegemon::RulerNameDialog::kPointerEntry);
@@ -296,7 +302,113 @@ void leaveRulerName(App& app) {
 }
 
 void acceptRulerName(App& app) {
-    SDL_Log("The ruler is %s. Choosing the banner colour is not there yet.", app.rulerName->name().c_str());
+    try {
+        app.banners = std::make_unique<hegemon::BannerSelectScreen>(*app.data, app.race);
+        app.pointer->useEntry(hegemon::BannerSelectScreen::kPointerEntry);
+        SDL_StopTextInput(app.window);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The banner colours could not be read: %s", e.what());
+    }
+}
+
+// Esc on the banner colours: the ruler's name again, with a new name.
+void leaveBanners(App& app) {
+    app.banners.reset();
+    leaveRulerName(app);
+    chooseRace(app, app.race);
+}
+
+void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
+    SDL_Log("Banner colour %zu taken. Making the galaxy is not there yet; Esc goes back to the main menu.",
+            static_cast<std::size_t>(colour));
+    try {
+        app.generating = std::make_unique<hegemon::GeneratingScreen>(*app.data);
+        app.pointer->usePicture(hegemon::Pointer::kBusy);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The message could not be read: %s", e.what());
+    }
+}
+
+// For now the galaxy isn't made: Esc or B goes back to the main menu.
+SDL_AppResult generatingEvent(App& app, SDL_Event* event) {
+    const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
+                      (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
+    if (back) {
+        app.generating.reset();
+        app.banners.reset();
+        app.rulerName.reset();
+        app.raceSelect.reset();
+        app.pointer->usePicture(hegemon::Pointer::kUsual);
+        app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
+        app.menu->reopen();
+        app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
+    }
+    return SDL_APP_CONTINUE;
+}
+
+// Hegemon's gamepad on the banner colours: the pointer jumps from banner to
+// banner.
+void stepBanner(App& app, int step) {
+    constexpr int n = static_cast<int>(hegemon::BannerSelectScreen::kBanners);
+    const auto current = app.banners->bannerAt(app.pointer->x(), app.pointer->y());
+    int at = current ? static_cast<int>(*current) + step : (step > 0 ? 0 : n - 1);
+    at = (at % n + n) % n;
+    const auto rect = app.banners->bannerRect(static_cast<std::size_t>(at));
+    app.pointer->move(rect.centerX(), rect.centerY());
+}
+
+SDL_AppResult bannerEvent(App& app, SDL_Event* event) {
+    auto& screen = *app.banners;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            screen.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto colour = screen.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                chooseBanner(app, *colour);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE) {
+            leaveBanners(app);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            if (const auto colour = screen.click(app.pointer->x(), app.pointer->y())) {
+                chooseBanner(app, *colour);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            stepBanner(app, -1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepBanner(app, 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            stepBanner(app, 4);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            if (const auto colour = screen.click(app.pointer->x(), app.pointer->y())) {
+                chooseBanner(app, *colour);
+            }
+            break;
+        case SDL_GAMEPAD_BUTTON_EAST:
+            leaveBanners(app);
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult rulerNameEvent(App& app, SDL_Event* event) {
@@ -521,6 +633,12 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     default:
         break;
     }
+    if (app->generating) {
+        return generatingEvent(*app, event);
+    }
+    if (app->banners) {
+        return bannerEvent(*app, event);
+    }
     if (app->rulerName) {
         return rulerNameEvent(*app, event);
     }
@@ -538,7 +656,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->rulerName) {
+        if (app->generating) {
+            app->generating->draw(app->canvas, app->palette);
+        } else if (app->banners) {
+            app->banners->draw(app->canvas, app->palette);
+        } else if (app->rulerName) {
             app->rulerName->tick(elapsed);
             app->rulerName->draw(app->canvas, app->palette);
         } else if (app->raceSelect) {
