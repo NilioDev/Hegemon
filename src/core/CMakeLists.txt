@@ -18,6 +18,8 @@ add_library(hgm_core STATIC
     src/ui/credits.cpp
     src/config/fan_patch_config.cpp
     src/config/parameters.cpp
+    src/rules/random.cpp
+    src/rules/galaxy_generator.cpp
     src/data/json.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)
