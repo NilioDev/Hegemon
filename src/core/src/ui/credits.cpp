@@ -61,7 +61,7 @@ TextStyle creditsStyle(int top) {
     }
     style.shades[1] = fade->shade1;
     style.shades[2] = fade->shade2;
-    style.shadow = 0;
+    style.shadow = std::uint8_t{0};
     // An outline all round each pixel.
     style.shadowAt = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
     style.spacing = 1;

@@ -61,7 +61,7 @@ FontSet FontSet::parse(std::span<const std::uint8_t> entry) {
                     }
                     rows.emplace_back();
                 } else if (b > kNewRow) {
-                    rows.back().insert(rows.back().end(), static_cast<std::size_t>(b - kNewRow), 0);
+                    rows.back().insert(rows.back().end(), static_cast<std::size_t>(b - kNewRow), std::uint8_t{0});
                 } else {
                     rows.back().push_back(b);
                 }

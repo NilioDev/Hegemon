@@ -90,7 +90,7 @@ HGM_TEST("Fonts: shadows go under the glyphs and stay inside the clip") {
     const auto set = FontSet::parse(makeFonts());
     const auto& font = set.font(0);
     TextStyle style = plainStyle();
-    style.shadow = 0;
+    style.shadow = std::uint8_t{0};
 
     // The usual shadow: one pixel right of and below every drawn pixel.
     Canvas plain(6, 4, 99);
