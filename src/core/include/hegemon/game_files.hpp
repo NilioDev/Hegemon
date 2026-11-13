@@ -20,6 +20,11 @@ inline constexpr std::array<std::string_view, 2> kMarkerFiles = {"MAINMENU.LBX",
 std::optional<std::filesystem::path> findFileNoCase(const std::filesystem::path& folder,
                                                     std::string_view name);
 
+// The same for a path of several parts split by '/', such as
+// "150/docs/config.json": each part may be in any case. Links are never
+// followed.
+std::optional<std::filesystem::path> findPathNoCase(std::filesystem::path folder, std::string_view relative);
+
 // True when the folder looks like an installation of the original game.
 bool isGameFolder(const std::filesystem::path& folder);
 

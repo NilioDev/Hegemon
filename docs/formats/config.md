@@ -6,7 +6,8 @@ reads the same files the same way, so a change made there, by the player or
 by a newer release of the fan patch, works in Hegemon too. The meaning of
 each setting is documented by the fan patch itself, in
 `150\docs\PARAMETERS.CFG` and its manual; this page covers how the files are
-read.
+read. The defaults come from the fan patch's own list of settings, see
+[parameters.md](parameters.md).
 
 The patched game refuses to start without `ORION2.CFG` ("unable to open
 ORION2.CFG"); Hegemon then asks the player to install the fan patch.

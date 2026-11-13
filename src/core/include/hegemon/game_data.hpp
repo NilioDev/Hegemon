@@ -4,6 +4,7 @@
 #pragma once
 
 #include "hegemon/config/fan_patch_config.hpp"
+#include "hegemon/config/parameters.hpp"
 #include "hegemon/data/lbx.hpp"
 
 #include <filesystem>
@@ -26,6 +27,12 @@ public:
     // installed in the folder.
     const FanPatchConfig* config() const { return config_ ? &*config_ : nullptr; }
 
+    // The fan patch's rule settings: the defaults from its list
+    // (150\docs\config.json) with the settings files applied. Read once.
+    // Throws FormatError when the fan patch or its list is missing or
+    // damaged, ConfigError when a setting isn't allowed.
+    const Parameters& parameters();
+
     // True when the folder has the file, in any case.
     bool hasFile(std::string_view name) const;
 
@@ -37,6 +44,7 @@ public:
 private:
     std::filesystem::path folder_;
     std::optional<FanPatchConfig> config_;
+    std::optional<Parameters> parameters_;
     std::map<std::string, LbxArchive, std::less<>> archives_;
 };
 
