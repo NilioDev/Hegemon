@@ -111,3 +111,27 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     HGM_CHECK(changed > 100);
     fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
 }
+
+HGM_TEST("Main menu: the version text at the bottom right") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!hegemon::isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    hegemon::GameData data(menuFolder(game, {}));
+    const hegemon::MainMenu menu(data);
+    hegemon::Canvas canvas(640, 480);
+    hegemon::Palette palette;
+    menu.draw(canvas, palette);
+    // The V's two top corners, in shade 2; the rest of its first row is the
+    // background.
+    HGM_CHECK(canvas.at(492, 433) == 215);
+    HGM_CHECK(canvas.at(496, 433) == 215);
+    int lit = 0;
+    for (int y = 433; y < 440; ++y) {
+        for (int x = 492; x < 560; ++x) {
+            lit += canvas.at(x, y) == 215 || canvas.at(x, y) == 208 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(lit > 50);
+    fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
+}
