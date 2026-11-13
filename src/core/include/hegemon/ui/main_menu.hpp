@@ -6,6 +6,7 @@
 
 #include "hegemon/data/image.hpp"
 #include "hegemon/game_data.hpp"
+#include "hegemon/ui/credits.hpp"
 
 #include <array>
 #include <optional>
@@ -35,6 +36,11 @@ public:
     void moveHighlight(int step);
     std::optional<Choice> activate() const;
 
+    // Lets `ms` milliseconds pass, for the scrolling credits.
+    void tick(std::uint64_t ms) { credits_.tick(ms); }
+    const Credits& credits() const { return credits_; }
+    Credits& credits() { return credits_; }
+
     // Draws the whole screen and sets the colours it is drawn with.
     void draw(Canvas& canvas, Palette& palette) const;
 
@@ -51,6 +57,7 @@ private:
 
     Image background_;
     Image panel_;
+    Credits credits_;
     // Per button: normal, highlighted and greyed out.
     std::vector<std::array<Image, 3>> buttons_;
     std::array<bool, kButtons> enabled_{};

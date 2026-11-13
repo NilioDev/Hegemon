@@ -38,6 +38,7 @@ struct App {
     std::vector<std::uint8_t> rgba = std::vector<std::uint8_t>(static_cast<std::size_t>(kScreenW) * kScreenH * 4);
     std::vector<std::string> lines;
     int stickDirection = 0; // left stick up (-1) or down (1) while held
+    Uint64 lastTicks = 0;
 };
 
 // Where a gamedata folder may be: next to the program, in the current
@@ -196,7 +197,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     auto* app = static_cast<App*>(appstate);
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
+    const Uint64 now = SDL_GetTicks();
+    const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
+    app->lastTicks = now;
     if (app->menu) {
+        app->menu->tick(elapsed);
         app->menu->draw(app->canvas, app->palette);
         hegemon::toRgba(app->canvas, app->palette, app->rgba);
         SDL_UpdateTexture(app->frame, nullptr, app->rgba.data(), kScreenW * 4);

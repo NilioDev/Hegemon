@@ -6,6 +6,9 @@ add_library(hgm_core STATIC
     src/ui/main_menu.cpp
     src/data/lbx.cpp
     src/data/image.cpp
+    src/data/font.cpp
+    src/data/text_table.cpp
+    src/ui/credits.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)
 
