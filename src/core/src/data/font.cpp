@@ -115,8 +115,8 @@ int Font::draw(Canvas& canvas, int x, int y, std::string_view text, const TextSt
         });
     }
     return each([&](int px, int py, std::uint8_t shade) {
-        if (shade < style.shades.size() && style.shades[shade] != 0) {
-            put(px, py, style.shades[shade]);
+        if (shade < style.shades.size() && style.shades[shade]) {
+            put(px, py, *style.shades[shade]);
         }
     });
 }

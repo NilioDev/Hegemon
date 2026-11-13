@@ -43,6 +43,15 @@ took them. Hegemon widens them to 8 bits by shifting left by 2 and repeating
 the two highest bits in the lowest two, so 0 stays 0 and 63 becomes 255. The
 full-screen pictures, such as the main menu's, carry all 256 colours.
 
+## Pictures made for other colours
+
+Some pictures carry colours that the original does not put in the palette,
+such as the dialog of `INBOX.LBX`: it draws each of their colours in the
+colour of the current palette nearest to it. Nearest means the least sum of
+the squared differences of red, green and blue, in 6 bits; on a tie the
+lowest number wins, and colour 0 is never taken. This was checked on every
+pixel of the ruler's name dialog over two different palettes.
+
 ## Frames made of runs
 
 Most frames describe only the pixels they draw, as runs along the lines.

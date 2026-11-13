@@ -18,3 +18,10 @@ entry.
 In `CREDITS.LBX` the first record is the number of credit lines, written in
 digits. Then each line takes two records: the text of the left column and
 that of the right column. Either may be empty.
+
+## Dialog titles
+
+`KENTEXT1.LBX` holds the English texts of the dialogs, one table per entry,
+each with a single record of 100 bytes. Entry 156 is "Enter Ruler Name"
+(entry 161 holds the same text). The other languages' files have not been
+looked at yet.

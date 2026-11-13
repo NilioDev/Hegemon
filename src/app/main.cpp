@@ -3,7 +3,7 @@
 // The Hegemon app: opens a window, turns mouse, keyboard and gamepad input
 // into commands for the current screen, and shows the 640×480 picture the
 // core draws, scaled sharply to the window. For now the screens are the
-// main menu, the New Game screen and the race selection.
+// main menu, the New Game screen, the race selection and the ruler's name.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -16,11 +16,13 @@
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
 #include "hegemon/ui/race_select.hpp"
+#include "hegemon/ui/ruler_name.hpp"
 #include "hegemon/version.hpp"
 
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -40,6 +42,9 @@ struct App {
     std::unique_ptr<hegemon::NewGameScreen> newGame; // while it is shown
     std::unique_ptr<hegemon::Races> races;
     std::unique_ptr<hegemon::RaceSelectScreen> raceSelect; // while it is shown
+    std::unique_ptr<hegemon::RulerNames> rulerNames;
+    std::unique_ptr<hegemon::RulerNameDialog> rulerName; // over the race selection
+    std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
     hegemon::Palette palette;
@@ -263,14 +268,78 @@ SDL_AppResult newGameEvent(App& app, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
-// What choosing a race leads to.
+// What choosing a race leads to: the ruler's name, offered one of the
+// race's eight at random.
 void chooseRace(App& app, std::size_t button) {
-    (void)app;
     if (button == hegemon::RaceSelectScreen::kCustom) {
         SDL_Log("Designing a custom race is not there yet.");
-    } else {
-        SDL_Log("Entering the ruler's name is not there yet.");
+        return;
     }
+    try {
+        if (!app.rulerNames) {
+            app.rulerNames = std::make_unique<hegemon::RulerNames>(*app.data);
+        }
+        std::uniform_int_distribution<std::size_t> pick(0, hegemon::RulerNames::kPerRace - 1);
+        app.rulerName = std::make_unique<hegemon::RulerNameDialog>(*app.data, button,
+                                                                   app.rulerNames->name(button, pick(app.random)));
+        app.pointer->useEntry(hegemon::RulerNameDialog::kPointerEntry);
+        SDL_StartTextInput(app.window);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The ruler name dialog could not be read: %s", e.what());
+    }
+}
+
+// Back from the ruler's name to the race selection.
+void leaveRulerName(App& app) {
+    SDL_StopTextInput(app.window);
+    app.rulerName.reset();
+}
+
+void acceptRulerName(App& app) {
+    SDL_Log("The ruler is %s. Choosing the banner colour is not there yet.", app.rulerName->name().c_str());
+}
+
+SDL_AppResult rulerNameEvent(App& app, SDL_Event* event) {
+    auto& dialog = *app.rulerName;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            dialog.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT &&
+            dialog.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+            acceptRulerName(app);
+        }
+        break;
+    case SDL_EVENT_TEXT_INPUT:
+        for (const char* c = event->text.text; *c != '\0'; ++c) {
+            if (static_cast<unsigned char>(*c) < 0x80) { // the font has no others
+                dialog.type(*c);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE) {
+            leaveRulerName(app);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            acceptRulerName(app);
+        } else if (event->key.key == SDLK_BACKSPACE) {
+            dialog.backspace();
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            acceptRulerName(app);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            leaveRulerName(app);
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 // Back from the race selection to the New Game screen.
@@ -452,6 +521,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     default:
         break;
     }
+    if (app->rulerName) {
+        return rulerNameEvent(*app, event);
+    }
     if (app->raceSelect) {
         return raceSelectEvent(*app, event);
     }
@@ -466,7 +538,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->raceSelect) {
+        if (app->rulerName) {
+            app->rulerName->tick(elapsed);
+            app->rulerName->draw(app->canvas, app->palette);
+        } else if (app->raceSelect) {
             app->raceSelect->draw(app->canvas, app->palette);
         } else if (app->newGame) {
             app->newGame->draw(app->canvas, app->palette);

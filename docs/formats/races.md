@@ -60,3 +60,11 @@ The second form gives all 31 picks in table order. Letters before a number
 are left out, and −1 for the richness means poor. Hegemon refuses a race,
 pick or value it doesn't know. The `race_pick` settings for costs and
 values are not read yet.
+
+## Ruler names
+
+Entry 0 of `RACENAME.LBX` is a table of texts (see [text.md](text.md)) of
+104 records of 20 bytes: eight names for each of the thirteen races, in the
+race selection's order, so the Alkari's are records 0 to 7 ("Ariel",
+"Heggira", ...). The longest has 14 letters. Hegemon refuses a table with
+fewer than 104 records.

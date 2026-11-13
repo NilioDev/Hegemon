@@ -30,6 +30,15 @@ struct Palette {
     void set(std::size_t first, std::span<const std::uint8_t> entries);
 };
 
+// For each colour of one palette, the colour of another to draw it in.
+using ColourMap = std::array<std::uint8_t, 256>;
+
+// Maps every colour of `from` to the colour of `to` nearest to it, as the
+// original does when it shows a picture made for other colours: the least
+// sum of the squared differences of the 6-bit red, green and blue, the
+// lowest number on a tie, and never colour 0. See docs/formats/images.md.
+ColourMap nearestColours(const Palette& from, const Palette& to);
+
 // A picture of 8-bit colour indexes. Pixels a frame does not draw keep the
 // value they had, which is how the original draws transparent parts and
 // builds an animation frame on top of the previous one.
@@ -89,6 +98,8 @@ public:
     // Draws frame `index` with its top left corner at (x, y). Pixels that fall
     // outside the canvas are left out.
     void draw(std::size_t index, Canvas& canvas, int x = 0, int y = 0) const;
+    // The same with each pixel's colour changed through `colours`.
+    void draw(std::size_t index, Canvas& canvas, int x, int y, const ColourMap& colours) const;
 
 private:
     int width_ = 0;
