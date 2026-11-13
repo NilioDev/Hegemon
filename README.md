@@ -10,8 +10,9 @@ screens, computer players and savegames, scaled sharply to any screen and
 with gamepad, mouse, keyboard and touch controls.
 
 > [!NOTE]
-> **Status: just started.** Hegemon finds your game files and reads their
-> archives. There is nothing to play yet.
+> **Status: just started.** Hegemon finds your game files and shows the
+> picture of the main menu from them, in the original's colours. There is
+> nothing to play yet.
 
 Hegemon is not affiliated with or endorsed by the makers of the original
 game. It contains none of the original game's files: you need your own copy.
@@ -36,8 +37,8 @@ and download the one for your system at the bottom of the page.
 
 Copy the folder of your installed game (the one with the `.LBX` files) into a
 folder named `gamedata` next to the program, or start it with the folder:
-`./Hegemon path/to/game`. Hegemon then says how many of the game's archives it
-could read.
+`./Hegemon path/to/game`. Hegemon then shows the main menu's picture from
+your files. Without game files it says where to put them.
 
 ## Controls
 

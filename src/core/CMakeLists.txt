@@ -3,6 +3,7 @@ configure_file(version.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/hegemon/ver
 add_library(hgm_core STATIC
     src/game_files.cpp
     src/data/lbx.cpp
+    src/data/image.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)
 
