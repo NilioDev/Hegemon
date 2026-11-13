@@ -22,7 +22,9 @@ constexpr std::size_t kFrameEntry = 0;
 // galaxy.
 constexpr std::size_t kFirstStar = 148;
 constexpr std::size_t kStarPictures = 6;
-constexpr std::size_t kBlackHoleEntry = 186;
+// Black holes: one picture for each scale from here (the medium one
+// measured, the others assumed), 16 frames of an animation.
+constexpr std::size_t kFirstBlackHole = 184;
 constexpr const char* kSkyArchive = "STARBG.LBX";
 constexpr std::size_t kSkyEntry = 3;
 constexpr std::size_t kFirstNebula = 6; // twelve, each at four scales
@@ -61,7 +63,8 @@ NameBox homeStarNameBox(GameData& data, std::string name) {
 GalaxyMap::GalaxyMap(GameData& data, const Galaxy& galaxy, std::vector<std::size_t> banners)
     : galaxy_(galaxy), banners_(std::move(banners)), frame_(Image::parse(data.archive(kArchive).entry(kFrameEntry))),
       sky_(Image::parse(data.archive(kSkyArchive).entry(kSkyEntry))),
-      blackHole_(Image::parse(data.archive(kArchive).entry(kBlackHoleEntry))),
+      blackHole_(Image::parse(data.archive(kArchive).entry(
+          kFirstBlackHole + static_cast<std::size_t>(std::clamp(galaxy.mapSize, 0, static_cast<int>(kNebulaScales) - 1))))),
       fonts_(FontSet::parse(data.archive("FONTS.LBX").entry(0))),
       scale_(std::clamp(galaxy.mapSize, 0, static_cast<int>(kNebulaScales) - 1)) {
     if (galaxy.width <= 0 || galaxy.height <= 0) {
@@ -105,7 +108,7 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
             s.colour == StarColour::BlackHole
                 ? blackHole_
                 : starSizes_[static_cast<std::size_t>(s.colour) * 3 + static_cast<std::size_t>(std::clamp(s.size, 0, 2))];
-        picture.draw(0, canvas, x - picture.width() / 2, y - picture.height() / 2);
+        picture.draw(0, canvas, x - (picture.width() - 1) / 2, y - (picture.height() - 1) / 2);
     }
     // At first the player knows only the name of their own home star.
     const Font& font = fonts_.font(kNameFont);

@@ -17,10 +17,14 @@ From the bottom up:
 1. The sky: STARBG.LBX entry 3, the whole screen.
 2. The nebulae: STARBG.LBX entry 6 + 4 × picture + scale, their top left
    corner where the nebula's corner is on the map.
-3. The stars, centred on their place: BUFFER0.LBX entry
+3. The stars, their middle pixel ((width - 1) / 2, (height - 1) / 2) on
+   their place: BUFFER0.LBX entry
    148 + 6 × colour + scale + size, frame 0 (blue to brown; each colour has
    six pictures, biggest first). A star's size is 0 to 2, one in three each
-   in the measured galaxies, whatever its colour.
+   in the measured galaxies, whatever its colour; the savegame keeps it in
+   the byte after the star's place. Black holes: BUFFER0.LBX entry
+   184 + scale (entry 185 measured for a medium galaxy), 34 × 34, an
+   animation of 16 frames.
 4. The names of the stars the player knows (at first only their home star),
    in FONTS.LBX font 2 with one pixel between letters, the letters centred
    under the star's middle and their top 11 pixels below it. Shade 2 is the
@@ -49,6 +53,8 @@ STARNAME.LBX, in colours 12 and 24.
 ## Still to do
 
 The side panel (stardate, money, research, food, ships, the Turn button),
-the fleets at the home stars, black holes, the sky's twinkling, the exact
+the fleets at the home stars, the black holes' animation, the sky's
+twinkling, the nebulae on the frame's bottom row (the original draws a
+nebula's pixels on row 421 over the frame there), the exact
 colours of the names' outline, zooming and scrolling, and everything a
 click on the map does.
