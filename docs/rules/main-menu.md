@@ -119,13 +119,24 @@ Measured with no savegames (both greyed out), with only `SAVE10.GAM`
 
 A button that can be used is drawn highlighted while the mouse pointer is
 over it; a greyed-out button stays greyed out. Holding the mouse button down
-does not change the look. The arrow keys do not move a highlight in the
+does not change the look. A button is taken when the mouse button is let go
+over it, wherever it went down: press on New Game, move to Quit Game and let
+go, and the game quits. The arrow keys do not move a highlight in the
 original.
+
+The first letter of each button takes it from the keyboard: C, L, N, M, H
+and Q. A greyed-out button's letter does nothing.
 
 The pointer is a small gun turret, 24 by 24 pixels: picture 0 of entry 6 of
 `FONTS.LBX` (see [../formats/fonts.md](../formats/fonts.md)). Its top-left
 pixel is the point that counts, and it starts in the middle of the screen
-at (320, 240).
+at (320, 240). It stays where it is when the screen changes.
+
+## Coming back to the menu
+
+Back from another screen (Cancel on the New Game screen, say), the menu is
+there at once, without the opening, and the credits start over from the
+bottom.
 
 **Added in Hegemon:** the pointer is hidden while the gamepad or the
 keyboard is used, and when the mouse leaves the window.
@@ -136,8 +147,10 @@ A or Enter takes it. This uses the original's own highlighted pictures.
 
 ## Still to do
 
-- Whether skipping the opening also moves the credits on, and which pointer
-  the other screens use.
+- Whether skipping the opening also moves the credits on, and whether the
+  credits wait 28 ticks when the menu comes back.
 - Entry 22, a second animation of 50 frames, probably played when the menu
   closes.
-- What each button leads to. Quit Game closes Hegemon for now.
+- What Continue, Load Game, Multi Player and Hall of Fame lead to. New Game
+  opens the New Game screen (see [new-game.md](new-game.md)) and Quit Game
+  closes Hegemon.

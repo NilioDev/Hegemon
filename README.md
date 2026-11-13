@@ -13,10 +13,12 @@ gamepad, mouse, keyboard and touch controls.
 > [!NOTE]
 > **Status: just started.** Hegemon shows the original's main menu from your
 > files, with its opening animation, scrolling credits, version text and
-> mouse pointer. A click or a key skips the opening. Continue and Load Game are only usable
-> when you have savegames, as in the original, and the buttons light up under
-> the mouse or the gamepad. Quit Game closes Hegemon; the other buttons don't
-> lead anywhere yet.
+> mouse pointer. A click or a key skips the opening. New Game opens the New
+> Game screen, where you can pick the difficulty, galaxy, players and the
+> other settings; choosing a race comes next. Continue and Load Game are
+> only usable when you have savegames, as in the original, and the buttons
+> light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,
+> Multi Player and Hall of Fame don't lead anywhere yet.
 
 Hegemon is not affiliated with or endorsed by the makers of the original
 game. It contains none of the original game's files: you need your own copy.
@@ -53,7 +55,9 @@ what is missing.
 
 | Action | Mouse | Keyboard | Gamepad |
 | --- | --- | --- | --- |
-| Choose a button in the main menu | Point and click | Up / Down, then Enter | D-pad or left stick, then A |
+| Choose a button in the main menu | Point and click | Up / Down, then Enter, or the button's first letter | D-pad or left stick, then A |
+| Change a setting on the New Game screen | Click its picture or switch | Enter clicks where the pointer is | D-pad or left stick to move, then A |
+| Leave the New Game screen | Cancel or Accept | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |
 

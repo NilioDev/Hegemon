@@ -50,6 +50,9 @@ credits draw a one-pixel outline all round instead (see
 Entries 1 to 13 each hold a set of mouse pointers. An entry is 1024 bytes
 (what they are for is not known yet; they look like a palette) followed by 20
 pictures of 24 by 24 pixels, one byte a pixel, row by row. Colour 0 is
-see-through. The main menu uses picture 0 of entry 6, see
-[../rules/main-menu.md](../rules/main-menu.md). Hegemon refuses an entry that
+see-through. The entries draw the same pointers in different colours, and
+each screen takes the one that suits its palette: the main menu picture 0
+of entry 6 (see [../rules/main-menu.md](../rules/main-menu.md)), the New
+Game screen picture 0 of entry 10 (see
+[../rules/new-game.md](../rules/new-game.md)). Hegemon refuses an entry that
 is too short for all 20 pictures.

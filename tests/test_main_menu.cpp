@@ -4,6 +4,7 @@
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/ui/main_menu.hpp"
+#include "hegemon/ui/pointer.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -82,7 +83,23 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     HGM_CHECK(menu.click(500, 220) == Choice::NewGame);
     HGM_CHECK(!menu.click(100, 100));
 
+    // A button is taken when the mouse button is let go over it, wherever
+    // it went down; the original's letter keys take it too.
+    menu.press(500, 220);
+    HGM_CHECK(!menu.release(450, 200)); // over greyed-out Load: nothing
+    menu.press(500, 220);
+    HGM_CHECK(menu.release(450, 290) == Choice::Quit);
+    HGM_CHECK(!menu.release(450, 290)); // no second release without a press
+    menu.press(100, 100);
+    HGM_CHECK(menu.release(450, 250) == Choice::Multiplayer);
+    HGM_CHECK(menu.hotkey('N') == Choice::NewGame);
+    HGM_CHECK(menu.hotkey('c') == Choice::Continue);
+    HGM_CHECK(!menu.hotkey('l')); // Load is greyed out
+    HGM_CHECK(menu.hotkey('q') == Choice::Quit);
+    HGM_CHECK(!menu.hotkey('x'));
+
     // The gamepad skips Load, which is greyed out.
+    menu.pointerMoved(0, 0);
     menu.moveHighlight(1);
     HGM_CHECK(menu.highlighted() == Choice::Continue);
     menu.moveHighlight(1);
@@ -97,10 +114,8 @@ HGM_TEST("Main menu: buttons where the original has them; pointer, clicks and ga
     hegemon::Canvas lit(640, 480);
     hegemon::Palette palette;
     menu.pointerMoved(0, 0);
-    menu.hidePointer(); // only the button's look counts here
     menu.draw(plain, palette);
     menu.pointerMoved(450, 250);
-    menu.hidePointer();
     menu.draw(lit, palette);
     int changed = 0;
     for (int y = 0; y < 480; ++y) {
@@ -205,8 +220,6 @@ HGM_TEST("Main menu: the opening animation, one frame a tick, then the buttons")
     hegemon::Canvas other(640, 480);
     menu.pointerMoved(0, 0);
     skipped.pointerMoved(0, 0);
-    menu.hidePointer();
-    skipped.hidePointer();
     menu.draw(other, palette);
     hegemon::Canvas mine(640, 480);
     skipped.draw(mine, palette);
@@ -220,23 +233,40 @@ HGM_TEST("Main menu: the opening animation, one frame a tick, then the buttons")
     fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
 }
 
-HGM_TEST("Main menu: the original's pointer where the mouse is") {
+HGM_TEST("Main menu: back from another screen, without the opening and with the credits from the start") {
     const fs::path game = HEGEMON_GAMEDATA_DIR;
     if (!hegemon::isGameFolder(game)) {
         HGM_SKIP("original game files not in gamedata/");
     }
     hegemon::GameData data(menuFolder(game, {}));
     hegemon::MainMenu menu(data);
-    menu.skipOpening();
-    hegemon::Palette palette;
+    menu.tick(20000);
+    HGM_CHECK(menu.credits().offset() > 0);
+    menu.reopen();
+    HGM_CHECK(!menu.opening());
+    HGM_CHECK(menu.credits().offset() == 0);
+    // A press from the other screen does not carry over.
+    HGM_CHECK(!menu.release(500, 220));
+    fs::remove_all(fs::temp_directory_path() / "hegemon_test_main_menu");
+}
+
+HGM_TEST("Pointer: the original's, where the mouse is") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!hegemon::isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    hegemon::GameData data(menuFolder(game, {}));
+    hegemon::Pointer pointer(data);
+    HGM_CHECK(pointer.x() == 320);
+    HGM_CHECK(pointer.y() == 240);
     hegemon::Canvas without(640, 480);
-    menu.hidePointer();
-    menu.draw(without, palette);
-    HGM_CHECK(!menu.pointerVisible());
-    menu.pointerMoved(100, 60);
-    HGM_CHECK(menu.pointerVisible());
+    pointer.hide();
+    pointer.draw(without);
+    HGM_CHECK(!pointer.visible());
+    pointer.move(100, 60);
+    HGM_CHECK(pointer.visible());
     hegemon::Canvas with(640, 480);
-    menu.draw(with, palette);
+    pointer.draw(with);
     int changed = 0;
     for (int y = 0; y < 480; ++y) {
         for (int x = 0; x < 640; ++x) {

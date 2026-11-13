@@ -32,6 +32,8 @@ public:
     int offset() const { return offset_; }
     // Moves the lines to an offset, for tests and comparing with captures.
     void setOffset(int pixels) { offset_ = pixels; }
+    // Starts the lines over from the bottom, as when the menu comes back.
+    void restart();
     // Where line `i` starts, from the top of the screen.
     int lineTop(std::size_t i) const;
 

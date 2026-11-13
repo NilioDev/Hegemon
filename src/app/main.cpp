@@ -2,8 +2,8 @@
 //
 // The Hegemon app: opens a window, turns mouse, keyboard and gamepad input
 // into commands for the current screen, and shows the 640×480 picture the
-// core draws, scaled sharply to the window. For now the only screen is the
-// main menu.
+// core draws, scaled sharply to the window. For now the screens are the
+// main menu and the New Game screen.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -13,6 +13,8 @@
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/ui/main_menu.hpp"
+#include "hegemon/ui/new_game.hpp"
+#include "hegemon/ui/pointer.hpp"
 #include "hegemon/version.hpp"
 
 #include <filesystem>
@@ -33,6 +35,9 @@ struct App {
     SDL_Texture* frame = nullptr;
     std::unique_ptr<hegemon::GameData> data;
     std::unique_ptr<hegemon::MainMenu> menu;
+    std::unique_ptr<hegemon::Pointer> pointer;
+    std::unique_ptr<hegemon::NewGameScreen> newGame; // while it is shown
+    hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
     hegemon::Palette palette;
     std::vector<std::uint8_t> rgba = std::vector<std::uint8_t>(static_cast<std::size_t>(kScreenW) * kScreenH * 4);
@@ -62,13 +67,48 @@ std::optional<std::filesystem::path> findGameFolder() {
     return std::nullopt;
 }
 
-// What a choice in the main menu does. Only Quit leads anywhere yet.
-SDL_AppResult choose(hegemon::MainMenu::Choice choice) {
-    if (choice == hegemon::MainMenu::Choice::Quit) {
+// What a choice in the main menu does.
+SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
+    using Choice = hegemon::MainMenu::Choice;
+    if (choice == Choice::Quit) {
         return SDL_APP_SUCCESS;
+    }
+    if (choice == Choice::NewGame) {
+        try {
+            app.newGame = std::make_unique<hegemon::NewGameScreen>(*app.data, app.settings);
+            app.pointer->useEntry(hegemon::NewGameScreen::kPointerEntry);
+        } catch (const hegemon::FormatError& e) {
+            SDL_Log("The New Game screen could not be read: %s", e.what());
+        }
+        return SDL_APP_CONTINUE;
     }
     SDL_Log("This part of the game is not there yet.");
     return SDL_APP_CONTINUE;
+}
+
+// Leaves the New Game screen for the main menu.
+void finishNewGame(App& app, hegemon::NewGameScreen::Result result) {
+    if (result == hegemon::NewGameScreen::Result::Accept) {
+        app.settings = app.newGame->settings();
+        SDL_Log("Choosing a race is not there yet.");
+    }
+    app.newGame.reset();
+    app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
+    app.menu->reopen();
+    app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
+}
+
+// Hegemon's gamepad on the New Game screen: the pointer jumps from item to
+// item.
+void stepNewGame(App& app, int step) {
+    using Item = hegemon::NewGameScreen::Item;
+    constexpr int n = static_cast<int>(hegemon::NewGameScreen::kItems);
+    const auto current = app.newGame->itemAt(app.pointer->x(), app.pointer->y());
+    int at = current ? static_cast<int>(*current) + step : (step > 0 ? 0 : n - 1);
+    at = (at + n) % n;
+    const auto rect = app.newGame->itemRect(static_cast<Item>(at));
+    app.pointer->move(rect.centerX(), rect.centerY());
+    app.newGame->pointerMoved(rect.centerX(), rect.centerY());
 }
 
 // The mouse position in the 640×480 picture.
@@ -114,6 +154,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
                 app->lines.push_back("and start Hegemon again.");
             } else {
                 app->menu = std::make_unique<hegemon::MainMenu>(*app->data);
+                app->pointer = std::make_unique<hegemon::Pointer>(*app->data);
             }
         } catch (const hegemon::FormatError& e) {
             app->menu.reset();
@@ -135,83 +176,179 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    auto* app = static_cast<App*>(appstate);
-    auto* menu = app->menu.get();
+namespace {
+
+SDL_AppResult newGameEvent(App& app, SDL_Event* event) {
+    auto& screen = *app.newGame;
     switch (event->type) {
-    case SDL_EVENT_QUIT:
-        return SDL_APP_SUCCESS;
-    case SDL_EVENT_GAMEPAD_ADDED:
-        SDL_OpenGamepad(event->gdevice.which);
-        break;
     case SDL_EVENT_MOUSE_MOTION:
-        if (menu != nullptr) {
-            screenPoint(*app, event);
-            menu->pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
-        }
-        break;
-    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-        if (menu != nullptr) {
-            menu->hidePointer();
-        }
+        screen.pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        if (menu != nullptr && menu->opening()) {
-            menu->skipOpening(); // any button skips the opening animation
-        } else if (menu != nullptr && event->button.button == SDL_BUTTON_LEFT) {
-            screenPoint(*app, event);
-            if (const auto choice = menu->click(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
-                return choose(*choice);
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            screen.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto result = screen.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                finishNewGame(app, *result);
             }
         }
         break;
     case SDL_EVENT_KEY_DOWN:
-        if (menu == nullptr) {
-            return event->key.key == SDLK_ESCAPE ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
-        }
-        if (menu->opening()) {
-            menu->skipOpening(); // any key skips the opening animation
-        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
-            menu->hidePointer();
-            menu->moveHighlight(event->key.key == SDLK_UP ? -1 : 1);
+        if (event->key.key == SDLK_ESCAPE) {
+            finishNewGame(app, hegemon::NewGameScreen::escape());
         } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
-            if (const auto choice = menu->activate()) {
-                return choose(*choice);
+            // The original's Enter clicks where the pointer is.
+            if (const auto result = screen.click(app.pointer->x(), app.pointer->y())) {
+                finishNewGame(app, *result);
             }
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        if (menu == nullptr) {
-            return event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
-        }
-        menu->hidePointer();
-        if (menu->opening()) {
-            menu->skipOpening();
-        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
-            menu->moveHighlight(-1);
-        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
-            menu->moveHighlight(1);
-        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
-            if (const auto choice = menu->activate()) {
-                return choose(*choice);
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            stepNewGame(app, -1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepNewGame(app, 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            if (const auto result = screen.click(app.pointer->x(), app.pointer->y())) {
+                finishNewGame(app, *result);
             }
+            break;
+        case SDL_GAMEPAD_BUTTON_EAST:
+            finishNewGame(app, hegemon::NewGameScreen::escape());
+            break;
+        default:
+            break;
         }
         break;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-        if (menu != nullptr && event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+        if (event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY || event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX) {
             const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
             const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
-            if (direction != 0 && direction != app->stickDirection) {
-                menu->hidePointer();
-                menu->moveHighlight(direction);
+            if (direction != 0 && direction != app.stickDirection) {
+                stepNewGame(app, direction);
             }
-            app->stickDirection = direction;
+            app.stickDirection = direction;
         }
         break;
     default:
         break;
     }
     return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult menuEvent(App& app, SDL_Event* event) {
+    auto& menu = *app.menu;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        menu.pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (menu.opening()) {
+            menu.skipOpening(); // any button skips the opening animation
+        } else if (event->button.button == SDL_BUTTON_LEFT) {
+            menu.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto choice = menu.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                return choose(app, *choice);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (menu.opening()) {
+            menu.skipOpening(); // any key skips the opening animation
+        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            app.pointer->hide();
+            menu.moveHighlight(event->key.key == SDLK_UP ? -1 : 1);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            if (const auto choice = menu.activate()) {
+                return choose(app, *choice);
+            }
+        } else if (event->key.key >= SDLK_A && event->key.key <= SDLK_Z) {
+            if (const auto choice = menu.hotkey(static_cast<char>('a' + (event->key.key - SDLK_A)))) {
+                return choose(app, *choice);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        app.pointer->hide();
+        if (menu.opening()) {
+            menu.skipOpening();
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
+            menu.moveHighlight(-1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            menu.moveHighlight(1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            if (const auto choice = menu.activate()) {
+                return choose(app, *choice);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        if (event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
+            const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
+            if (direction != 0 && direction != app.stickDirection) {
+                app.pointer->hide();
+                menu.moveHighlight(direction);
+            }
+            app.stickDirection = direction;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+} // namespace
+
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+    auto* app = static_cast<App*>(appstate);
+    switch (event->type) {
+    case SDL_EVENT_QUIT:
+        return SDL_APP_SUCCESS;
+    case SDL_EVENT_GAMEPAD_ADDED:
+        SDL_OpenGamepad(event->gdevice.which);
+        return SDL_APP_CONTINUE;
+    default:
+        break;
+    }
+    if (app->menu == nullptr) {
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            return event->key.key == SDLK_ESCAPE ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
+        }
+        if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+            return event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
+        }
+        return SDL_APP_CONTINUE;
+    }
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        screenPoint(*app, event);
+        app->pointer->move(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        screenPoint(*app, event);
+        break;
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+        app->pointer->hide();
+        return SDL_APP_CONTINUE;
+    default:
+        break;
+    }
+    return app->newGame ? newGameEvent(*app, event) : menuEvent(*app, event);
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
@@ -222,8 +359,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        app->menu->tick(elapsed);
-        app->menu->draw(app->canvas, app->palette);
+        if (app->newGame) {
+            app->newGame->draw(app->canvas, app->palette);
+        } else {
+            app->menu->tick(elapsed);
+            app->menu->draw(app->canvas, app->palette);
+        }
+        app->pointer->draw(app->canvas);
         hegemon::toRgba(app->canvas, app->palette, app->rgba);
         SDL_UpdateTexture(app->frame, nullptr, app->rgba.data(), kScreenW * 4);
         SDL_RenderTexture(app->renderer, app->frame, nullptr, nullptr);

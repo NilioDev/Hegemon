@@ -14,9 +14,6 @@ constexpr std::size_t kOpeningEntry = 0;
 constexpr std::size_t kBackgroundEntry = 1;
 constexpr std::size_t kPanelEntry = 2;
 constexpr std::size_t kFirstButtonEntry = 3;
-// The menu's pointers: FONTS.LBX entry 6, its first pointer.
-constexpr std::size_t kPointerEntry = 6;
-constexpr std::size_t kPointer = 0;
 constexpr int kButtonX = 415;
 constexpr std::array<int, MainMenu::kButtons> kButtonY = {172, 195, 217, 240, 262, 285};
 
@@ -73,8 +70,7 @@ std::string expand(std::string text, std::string_view name, std::string_view val
 MainMenu::MainMenu(GameData& data)
     : background_(Image::parse(data.archive(kArchive).entry(kBackgroundEntry))),
       panel_(Image::parse(data.archive(kArchive).entry(kPanelEntry))),
-      opening_(Image::parse(data.archive(kArchive).entry(kOpeningEntry))),
-      pointers_(PointerSet::parse(data.archive("FONTS.LBX").entry(kPointerEntry))), credits_(data) {
+      opening_(Image::parse(data.archive(kArchive).entry(kOpeningEntry))), credits_(data) {
     if (opening_.width() != opened_.width() || opening_.height() != opened_.height()) {
         throw FormatError("main menu opening is not a full screen");
     }
@@ -106,12 +102,6 @@ MainMenu::MainMenu(GameData& data)
     version_.text = expand(version_.text, "VERSION", kVersion);
     modName_ = readLabel(config, "mod_name", {"Config: $MOD$", 2, 'r', 590, 400});
     modName_.text = expand(modName_.text, "MOD", modName);
-}
-
-void MainMenu::drawPointer(Canvas& canvas) const {
-    if (pointerVisible_) {
-        pointers_.draw(kPointer, canvas, pointerX_, pointerY_);
-    }
 }
 
 void MainMenu::drawLabel(Canvas& canvas, const Label& label) const {
@@ -148,9 +138,6 @@ std::optional<std::size_t> MainMenu::buttonAt(int x, int y) const {
 }
 
 void MainMenu::pointerMoved(int x, int y) {
-    pointerX_ = x;
-    pointerY_ = y;
-    pointerVisible_ = true;
     const auto at = buttonAt(x, y);
     highlighted_.reset();
     if (opening()) {
@@ -161,13 +148,48 @@ void MainMenu::pointerMoved(int x, int y) {
     }
 }
 
+void MainMenu::press(int x, int y) {
+    if (opening()) {
+        skipOpening();
+        return;
+    }
+    pressed_ = true;
+    pointerMoved(x, y);
+}
+
+std::optional<MainMenu::Choice> MainMenu::release(int x, int y) {
+    if (!pressed_) {
+        return std::nullopt;
+    }
+    pressed_ = false;
+    pointerMoved(x, y);
+    return highlighted_;
+}
+
 std::optional<MainMenu::Choice> MainMenu::click(int x, int y) {
+    press(x, y);
+    return release(x, y);
+}
+
+std::optional<MainMenu::Choice> MainMenu::hotkey(char letter) {
     if (opening()) {
         skipOpening();
         return std::nullopt;
     }
-    pointerMoved(x, y);
-    return highlighted_;
+    constexpr std::array<char, kButtons> kLetters = {'c', 'l', 'n', 'm', 'h', 'q'};
+    const char lower = letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter - 'A' + 'a') : letter;
+    for (std::size_t b = 0; b < kButtons; ++b) {
+        if (kLetters[b] == lower && enabled_[b]) {
+            return static_cast<Choice>(b);
+        }
+    }
+    return std::nullopt;
+}
+
+void MainMenu::reopen() {
+    skipOpening();
+    pressed_ = false;
+    credits_.restart();
 }
 
 void MainMenu::tick(std::uint64_t ms) {
@@ -231,7 +253,6 @@ void MainMenu::draw(Canvas& canvas, Palette& palette) const {
     }
     credits_.draw(canvas);
     if (opening()) {
-        drawPointer(canvas);
         return;
     }
     drawLabel(canvas, modName_);
@@ -245,7 +266,6 @@ void MainMenu::draw(Canvas& canvas, Palette& palette) const {
         }
         buttons_[b][static_cast<std::size_t>(state)].draw(0, canvas, kButtonX, kButtonY[b]);
     }
-    drawPointer(canvas);
 }
 
 } // namespace hegemon

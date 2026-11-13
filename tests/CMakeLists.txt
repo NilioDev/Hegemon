@@ -4,6 +4,7 @@ add_executable(hgm_tests
     test_lbx.cpp
     test_image.cpp
     test_main_menu.cpp
+    test_new_game.cpp
     test_font.cpp
     test_credits.cpp
     test_config.cpp

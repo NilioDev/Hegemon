@@ -131,4 +131,10 @@ void Credits::draw(Canvas& canvas) const {
     }
 }
 
+void Credits::restart() {
+    offset_ = 0;
+    ticksDone_ = 0;
+    timer_ = PitTimer{};
+}
+
 } // namespace hegemon

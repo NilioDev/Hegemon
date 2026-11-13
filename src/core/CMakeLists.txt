@@ -4,6 +4,8 @@ add_library(hgm_core STATIC
     src/game_files.cpp
     src/game_data.cpp
     src/ui/main_menu.cpp
+    src/ui/new_game.cpp
+    src/ui/pointer.cpp
     src/data/lbx.cpp
     src/data/image.cpp
     src/data/font.cpp
