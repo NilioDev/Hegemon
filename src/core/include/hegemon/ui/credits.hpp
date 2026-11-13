@@ -6,6 +6,7 @@
 
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
+#include "hegemon/ui/pit_timer.hpp"
 
 #include <cstdint>
 #include <string>
@@ -23,12 +24,16 @@ public:
 
     // Lets `ms` milliseconds pass.
     void tick(std::uint64_t ms);
+    // Lets ticks of the PC timer pass.
+    void advanceTicks(std::uint64_t ticks);
     void draw(Canvas& canvas) const;
 
     // How far the lines have moved up since they last started, in pixels.
     int offset() const { return offset_; }
     // Moves the lines to an offset, for tests and comparing with captures.
     void setOffset(int pixels) { offset_ = pixels; }
+    // Starts the lines over from the bottom, as when the menu comes back.
+    void restart();
     // Where line `i` starts, from the top of the screen.
     int lineTop(std::size_t i) const;
 
@@ -36,12 +41,10 @@ public:
     const FontSet& fonts() const { return fonts_; }
 
 private:
-    void advanceTicks(std::uint64_t ticks);
-
     FontSet fonts_;
     std::vector<std::pair<std::string, std::string>> lines_;
     int offset_ = 0;
-    std::uint64_t elapsedMicros_ = 0;
+    PitTimer timer_;
     std::uint64_t ticksDone_ = 0;
 };
 

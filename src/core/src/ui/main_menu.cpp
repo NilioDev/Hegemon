@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hegemon/ui/main_menu.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace hegemon {
@@ -9,6 +10,7 @@ namespace {
 
 // Measured on the original (docs/rules/main-menu.md).
 constexpr const char* kArchive = "MAINMENU.LBX";
+constexpr std::size_t kOpeningEntry = 0;
 constexpr std::size_t kBackgroundEntry = 1;
 constexpr std::size_t kPanelEntry = 2;
 constexpr std::size_t kFirstButtonEntry = 3;
@@ -67,7 +69,12 @@ std::string expand(std::string text, std::string_view name, std::string_view val
 
 MainMenu::MainMenu(GameData& data)
     : background_(Image::parse(data.archive(kArchive).entry(kBackgroundEntry))),
-      panel_(Image::parse(data.archive(kArchive).entry(kPanelEntry))), credits_(data) {
+      panel_(Image::parse(data.archive(kArchive).entry(kPanelEntry))),
+      opening_(Image::parse(data.archive(kArchive).entry(kOpeningEntry))), credits_(data) {
+    if (opening_.width() != opened_.width() || opening_.height() != opened_.height()) {
+        throw FormatError("main menu opening is not a full screen");
+    }
+    advanceOpening(0);
     const auto& archive = data.archive(kArchive);
     for (std::size_t b = 0; b < kButtons; ++b) {
         std::array<Image, 3> states;
@@ -133,17 +140,89 @@ std::optional<std::size_t> MainMenu::buttonAt(int x, int y) const {
 void MainMenu::pointerMoved(int x, int y) {
     const auto at = buttonAt(x, y);
     highlighted_.reset();
+    if (opening()) {
+        return;
+    }
     if (at && enabled_[*at]) {
         highlighted_ = static_cast<Choice>(*at);
     }
 }
 
-std::optional<MainMenu::Choice> MainMenu::click(int x, int y) {
+void MainMenu::press(int x, int y) {
+    if (opening()) {
+        skipOpening();
+        return;
+    }
+    pressed_ = true;
+    pointerMoved(x, y);
+}
+
+std::optional<MainMenu::Choice> MainMenu::release(int x, int y) {
+    if (!pressed_) {
+        return std::nullopt;
+    }
+    pressed_ = false;
     pointerMoved(x, y);
     return highlighted_;
 }
 
+std::optional<MainMenu::Choice> MainMenu::click(int x, int y) {
+    press(x, y);
+    return release(x, y);
+}
+
+std::optional<MainMenu::Choice> MainMenu::hotkey(char letter) {
+    if (opening()) {
+        skipOpening();
+        return std::nullopt;
+    }
+    constexpr std::array<char, kButtons> kLetters = {'c', 'l', 'n', 'm', 'h', 'q'};
+    const char lower = letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter - 'A' + 'a') : letter;
+    for (std::size_t b = 0; b < kButtons; ++b) {
+        if (kLetters[b] == lower && enabled_[b]) {
+            return static_cast<Choice>(b);
+        }
+    }
+    return std::nullopt;
+}
+
+void MainMenu::reopen() {
+    skipOpening();
+    pressed_ = false;
+    credits_.restart();
+}
+
+void MainMenu::tick(std::uint64_t ms) {
+    const std::uint64_t ticks = timer_.advance(ms);
+    const std::uint64_t before = openingTicks_;
+    advanceOpening(ticks);
+    // The credits start moving a while into the opening.
+    const std::uint64_t now = before + ticks;
+    if (now > kCreditsStartTick) {
+        credits_.advanceTicks(now - std::max(before, kCreditsStartTick));
+    }
+}
+
+void MainMenu::advanceOpening(std::uint64_t ticks) {
+    openingTicks_ += ticks;
+    // Frame `t` is drawn at tick `t`, each over the ones before.
+    const std::uint64_t wanted = std::min<std::uint64_t>(openingTicks_ + 1, opening_.frameCount());
+    for (; openingFrames_ < wanted; ++openingFrames_) {
+        opening_.draw(openingFrames_, opened_);
+    }
+}
+
+void MainMenu::skipOpening() {
+    if (opening()) {
+        advanceOpening(kOpenedTick - openingTicks_);
+    }
+}
+
 void MainMenu::moveHighlight(int step) {
+    if (opening()) {
+        skipOpening();
+        return;
+    }
     std::size_t at = highlighted_ ? index(*highlighted_) : (step > 0 ? kButtons - 1 : 0);
     for (std::size_t tries = 0; tries < kButtons; ++tries) {
         at = (at + kButtons + static_cast<std::size_t>(step > 0 ? 1 : kButtons - 1)) % kButtons;
@@ -154,16 +233,28 @@ void MainMenu::moveHighlight(int step) {
     }
 }
 
-std::optional<MainMenu::Choice> MainMenu::activate() const {
+std::optional<MainMenu::Choice> MainMenu::activate() {
+    if (opening()) {
+        skipOpening();
+        return std::nullopt;
+    }
     return highlighted_;
 }
 
 void MainMenu::draw(Canvas& canvas, Palette& palette) const {
+    // The last frame of the opening is the screen behind the buttons. It is
+    // the picture of entries 1 and 2, but for 22 pixels.
     background_.applyPalette(palette);
     panel_.applyPalette(palette);
-    background_.draw(0, canvas);
-    panel_.draw(0, canvas);
+    for (int y = 0; y < opened_.height() && y < canvas.height(); ++y) {
+        for (int x = 0; x < opened_.width() && x < canvas.width(); ++x) {
+            canvas.set(x, y, opened_.at(x, y));
+        }
+    }
     credits_.draw(canvas);
+    if (opening()) {
+        return;
+    }
     drawLabel(canvas, modName_);
     drawLabel(canvas, version_);
     for (std::size_t b = 0; b < kButtons; ++b) {

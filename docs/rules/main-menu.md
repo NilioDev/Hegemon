@@ -23,6 +23,28 @@ and 22 or 23 high.
 With these steps Hegemon's screen matches the original pixel for pixel,
 except for what is listed under *Still to do*.
 
+## The opening
+
+The menu does not appear at once. Entry 0 of `MAINMENU.LBX` is an animation
+of 50 frames, 640 by 480, each frame drawn over the one before it. The
+original draws frame *t* at timer tick *t* (18.2 ticks a second, the PC's
+timer), starting with frame 0 as soon as the menu opens.
+
+- The credits start scrolling at tick 28, while the animation still runs.
+- The buttons, the version text and the mod name appear at tick 50, when
+  the animation is done.
+- The last frame is the finished menu: it differs from entries 1 and 2 in
+  only 22 pixels: four just left of the version text and two short stretches
+  of the rightmost column (x = 639, rows 136 to 143 and 336 to 345) are
+  black. They stay as the animation left them.
+- During the animation the mouse pointer is drawn and moves, but no button
+  lights up. A key or a mouse click skips straight to the end; that press
+  does nothing else.
+
+The colours come from entries 1 and 2, as on the finished menu.
+
+**Added in Hegemon:** a gamepad button also skips the opening.
+
 ## The credits
 
 The lines of `CREDITS.LBX` (see [../formats/text.md](../formats/text.md))
@@ -97,8 +119,27 @@ Measured with no savegames (both greyed out), with only `SAVE10.GAM`
 
 A button that can be used is drawn highlighted while the mouse pointer is
 over it; a greyed-out button stays greyed out. Holding the mouse button down
-does not change the look. The arrow keys do not move a highlight in the
+does not change the look. A button is taken when the mouse button is let go
+over it, wherever it went down: press on New Game, move to Quit Game and let
+go, and the game quits. The arrow keys do not move a highlight in the
 original.
+
+The first letter of each button takes it from the keyboard: C, L, N, M, H
+and Q. A greyed-out button's letter does nothing.
+
+The pointer is a small gun turret, 24 by 24 pixels: picture 0 of entry 6 of
+`FONTS.LBX` (see [../formats/fonts.md](../formats/fonts.md)). Its top-left
+pixel is the point that counts, and it starts in the middle of the screen
+at (320, 240). It stays where it is when the screen changes.
+
+## Coming back to the menu
+
+Back from another screen (Cancel on the New Game screen, say), the menu is
+there at once, without the opening, and the credits start over from the
+bottom.
+
+**Added in Hegemon:** the pointer is hidden while the gamepad or the
+keyboard is used, and when the mouse leaves the window.
 
 **Added in Hegemon:** with a gamepad or the keyboard, Up and Down move the
 highlight from one usable button to the next (skipping greyed-out ones), and
@@ -106,10 +147,10 @@ A or Enter takes it. This uses the original's own highlighted pictures.
 
 ## Still to do
 
-- A few small lights on the right edge of the frame that change over time.
-- Four pixels of the background just left of the version text, and two short
-  stretches of the rightmost column (x = 639, rows 136 to 143 and 336 to
-  345), are black in the original.
-- The original's mouse pointer: a small gun turret. It is not one of the
-  pictures in the LBX archives.
-- What each button leads to. Quit Game closes Hegemon for now.
+- Whether skipping the opening also moves the credits on, and whether the
+  credits wait 28 ticks when the menu comes back.
+- Entry 22, a second animation of 50 frames, probably played when the menu
+  closes.
+- What Continue, Load Game, Multi Player and Hall of Fame lead to. New Game
+  opens the New Game screen (see [new-game.md](new-game.md)) and Quit Game
+  closes Hegemon.
