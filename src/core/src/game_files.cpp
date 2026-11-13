@@ -35,6 +35,32 @@ std::optional<std::filesystem::path> findFileNoCase(const std::filesystem::path&
     return std::nullopt;
 }
 
+std::optional<std::filesystem::path> findPathNoCase(std::filesystem::path folder, std::string_view relative) {
+    while (!relative.empty()) {
+        const auto slash = relative.find('/');
+        const auto part = relative.substr(0, slash);
+        const bool last = slash == std::string_view::npos;
+        std::optional<std::filesystem::path> found;
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(folder, ec)) {
+            if (entry.is_symlink(ec) || !equalsNoCase(entry.path().filename().string(), part)) {
+                continue;
+            }
+            if (last ? entry.is_regular_file(ec) : entry.is_directory(ec)) {
+                found = entry.path();
+                break;
+            }
+        }
+        if (!found) {
+            return std::nullopt;
+        }
+        folder = *found;
+        relative = last ? std::string_view{} : relative.substr(slash + 1);
+    }
+    return folder;
+}
+
+
 bool isGameFolder(const std::filesystem::path& folder) {
     for (const auto name : kMarkerFiles) {
         if (!findFileNoCase(folder, name)) {
