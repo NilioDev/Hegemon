@@ -11,6 +11,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -21,7 +22,8 @@ struct ShadowOffset {
     int dx, dy;
 };
 
-// What colour each shade of a glyph is drawn in (shade 0 is never drawn),
+// What colour each shade of a glyph is drawn in (shade 0 is never drawn,
+// nor a shade set to colour 0),
 // and the colour of the shadow, if there is one. The shadow is drawn first,
 // at each of `shadowAt` from every drawn pixel; the glyphs go over it.
 struct TextStyle {
@@ -77,5 +79,10 @@ public:
 private:
     std::array<Font, kFonts> fonts_;
 };
+
+// Breaks a text into lines at its spaces, putting as many words on each
+// line as fit in `maxWidth` pixels (up to the last pixel of the last
+// letter). A word wider than that gets a line of its own.
+std::vector<std::string> wrapWords(const Font& font, std::string_view text, int maxWidth, int spacing);
 
 } // namespace hegemon

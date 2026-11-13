@@ -3,6 +3,8 @@
 
 #include "hegemon/data/reader.hpp"
 
+#include <algorithm>
+
 namespace hegemon {
 
 namespace {
@@ -113,10 +115,35 @@ int Font::draw(Canvas& canvas, int x, int y, std::string_view text, const TextSt
         });
     }
     return each([&](int px, int py, std::uint8_t shade) {
-        if (shade < style.shades.size()) {
+        if (shade < style.shades.size() && style.shades[shade] != 0) {
             put(px, py, style.shades[shade]);
         }
     });
+}
+
+std::vector<std::string> wrapWords(const Font& font, std::string_view text, int maxWidth, int spacing) {
+    std::vector<std::string> lines;
+    std::string line;
+    std::size_t at = 0;
+    while (at < text.size()) {
+        const std::size_t end = std::min(text.find(' ', at), text.size());
+        const std::string_view word = text.substr(at, end - at);
+        at = end + 1;
+        if (word.empty()) {
+            continue;
+        }
+        const std::string candidate = line.empty() ? std::string(word) : line + " " + std::string(word);
+        if (!line.empty() && font.textWidth(candidate, spacing) - spacing > maxWidth) {
+            lines.push_back(line);
+            line = std::string(word);
+        } else {
+            line = candidate;
+        }
+    }
+    if (!line.empty()) {
+        lines.push_back(line);
+    }
+    return lines;
 }
 
 } // namespace hegemon

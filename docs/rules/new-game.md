@@ -64,7 +64,8 @@ Average, with all three switches on.
 - No button lights up just because the pointer is over it.
 - Esc is Cancel. Enter is a click where the pointer is.
 - Cancel goes back to the main menu and forgets the changes: the screen
-  shows the old settings the next time. Accept goes on to choosing a race.
+  shows the old settings the next time. Accept goes on to choosing a race
+  (see [race-select.md](race-select.md)).
 
 **Added in Hegemon:** with a gamepad, the D-pad or the left stick moves the
 pointer from one item to the next (the five pictures, the three switches,
@@ -74,8 +75,6 @@ Cancel and Accept), A clicks where it is and B is Cancel.
 
 - A right click shows a help text for the item under the pointer, over a
   darkened screen (from `HELP.LBX`).
-- The race selection after Accept. For now Accept keeps the settings for
-  the next time and goes back to the main menu.
 - The original keeps the settings in `150.SET` from one session to the
   next; when it writes them has not been measured.
 - The texts come from the original's string tables; Hegemon has them in
