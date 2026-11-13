@@ -25,21 +25,60 @@ From the bottom up:
    the byte after the star's place. Black holes: BUFFER0.LBX entry
    184 + scale (entry 185 measured for a medium galaxy), 34 × 34, an
    animation of 16 frames.
-4. The names of the stars the player knows (at first only their home star),
+4. The player's fleets: BUFFER0.LBX entry 208 − scale, the frame of the
+   player's banner (red: 0), its top left corner 5 pixels left of and 1
+   above the top right corner of the star's picture on a medium map (measured
+   with all three star sizes); 6 left and level on a small map, 6 left and 2
+   above on a large one (one star each); the huge map is assumed like the
+   large one.
+5. The names of the stars the player knows (at first only their home star),
    in FONTS.LBX font 2 with one pixel between letters, the letters centred
-   under the star's middle and their top 11 pixels below it. Shade 2 is the
-   banner's colour (red: 79), shade 1 a dark one (red: 74), with a dark
-   outline around the letters (colours 1 and 2).
-5. Black, on the left, top and right edges of the frame's opening
+   under the star's middle and their top 14, 11 or 9 pixels below it for a
+   star of size 0, 1 or 2 (measured on medium maps). Shade 2 is the banner's
+   colour (red: 79), shade 1 a dark one (red: 74), with a dark outline (see
+   below).
+6. Black, on the left, top and right edges of the frame's opening
    (x 20 and 527, y 20): the map shows from (21, 21) to (526, 421).
-6. The frame: BUFFER0.LBX entry 0, whose opening (x 20 to 527, y 20 to 421)
+7. The frame: BUFFER0.LBX entry 0, whose opening (x 20 to 527, y 20 to 421)
    lets the map through.
+8. The side panel's texts (see below).
 
 "Scale" is 0 to 3: the galaxy's map size (small, medium, large, huge; a
 cluster galaxy has a large map). With the whole galaxy in view the map is
 drawn 506 × 400 pixels from (21, 21), whatever the galaxy's size:
 x on the screen = 21 + x × 506 / width, y = 21 + y × 400 / height, rounded
 down.
+
+## The outline of texts on the map
+
+Names and the side panel's texts have a dark outline: before the letters,
+the whole text is drawn one pixel away in this order, each time over what
+was drawn before: left; down right; up left; up; right; down; up right;
+down left. Each pixel of shade 1 draws colour 1 there and each of shade 2
+colour 2 (this fits 771 of the 773 outline pixels measured).
+
+## The side panel
+
+From the top, in FONTS.LBX font 2 with two pixels between letters, shade 1
+in colour 14 and shade 2 in 23, with the outline above. Centred texts are
+placed at x = 579 − w / 2, rounded down, where w is the text's width with
+the spacing after each letter (the stardate: 580 − w / 2).
+
+| Text | Example | Top |
+| --- | --- | --- |
+| Stardate, year and tenth | 3500.0 | 29 |
+| Treasury | 50 BC | 96 |
+| Income a turn | +8 BC | 108 |
+| Command points left, and in all | +3 (6) | 181 |
+| Food left over | +0 | 255 |
+| Freighters left, and in all | +0 (0) | 330 |
+| Research project | none (HESTRNGS.LBX message 392) | 403 |
+
+The command points and the freighters are two texts each: the first ends
+(with its spacing) at x 578, the second starts at 582 (freighters: 576 and
+578). The command points' total in brackets has no outline. These places
+were measured with one-digit numbers only. What the numbers are is in
+[economy.md](economy.md).
 
 ## Enter Home Star Name
 
@@ -52,9 +91,9 @@ STARNAME.LBX, in colours 12 and 24.
 
 ## Still to do
 
-The side panel (stardate, money, research, food, ships, the Turn button),
-the fleets at the home stars, the black holes' animation, the sky's
-twinkling, the nebulae on the frame's bottom row (the original draws a
-nebula's pixels on row 421 over the frame there), the exact
-colours of the names' outline, zooming and scrolling, and everything a
-click on the map does.
+Wider numbers on the side panel, a research project's name, the Turn
+button, other players' fleets and fleets in flight, the black holes'
+animation, the sky's twinkling, the nebulae on the frame's bottom row (the
+original draws a nebula's pixels on row 421 over the frame there), the names
+under stars of other sizes on the other maps, zooming and scrolling, and
+everything a click on the map does.

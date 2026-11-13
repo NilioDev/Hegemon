@@ -35,14 +35,41 @@ constexpr std::size_t kNebulaScales = 4;
 constexpr int kMapX = 21, kMapY = 21;
 constexpr int kMapW = 506, kMapH = 400;
 constexpr Rect kMapClip = {21, 21, 506, 401};
+// The dark outline of the map's texts: the text drawn around itself in this
+// order, each shade in its own dark colour (measured).
+constexpr std::uint8_t kOutline1 = 1, kOutline2 = 2;
+const std::vector<ShadowOffset> kOutlineOrder = {{-1, 0}, {1, 1}, {-1, -1}, {0, -1}, {1, 0}, {0, 1}, {1, -1}, {-1, 1}};
 // Home star names: font 2 in the banner's colour under the star.
 constexpr std::size_t kNameFont = 2;
 constexpr int kNameSpacing = 1;
-constexpr int kNameBelow = 11; // the name's top, below the star's middle
-constexpr std::uint8_t kNameOutline = 2;
+// The name's top, below the star's middle, by the star's size (measured on
+// the medium map; assumed the same on the others).
+constexpr std::array<int, 3> kNameBelow = {14, 11, 9};
 // The banner colours names are written in, red to orange.
 constexpr std::array<std::uint8_t, 8> kBannerText = {79, 79, 79, 79, 79, 79, 79, 79};
 constexpr std::array<std::uint8_t, 8> kBannerTextDark = {74, 74, 74, 74, 74, 74, 74, 74};
+
+// The fleet marker at a star: entry 208 - scale, a frame per banner, its
+// top left corner this far from the star picture's top right one (the
+// medium map measured with all three star sizes, the small and large maps
+// with one, the huge one assumed like the large one).
+constexpr std::size_t kFleetLast = 208;
+constexpr std::array<std::array<int, 2>, 4> kFleetOffset = {{{-6, 0}, {-5, -1}, {-6, -2}, {-6, -2}}};
+
+// The side panel's texts: font 2 in two greys, centred on x 579 (the
+// stardate on 580).
+constexpr int kPanelSpacing = 2;
+constexpr std::uint8_t kPanelShade1 = 14, kPanelShade2 = 23;
+constexpr int kPanelCentre = 579, kStardateCentre = 580;
+constexpr int kStardateY = 29, kMoneyY = 96, kIncomeY = 108, kCommandY = 181, kFoodY = 255, kFreightY = 330,
+              kResearchY = 403;
+// Command points and freighters are two texts: the first ends at the
+// first x (with its spacing), the second starts at the other.
+constexpr int kCommandSplit[2] = {578, 582};
+constexpr int kFreightSplit[2] = {576, 578};
+constexpr std::size_t kNoneText = 392; // HESTRNGS.LBX: "none"
+
+std::string signedNumber(int n) { return (n >= 0 ? "+" : "") + std::to_string(n); }
 
 // The Enter Home Star Name box: its corner, its title (HESTRNGS.LBX) and
 // its texts' colours.
@@ -65,6 +92,8 @@ GalaxyMap::GalaxyMap(GameData& data, const Galaxy& galaxy, std::vector<std::size
       sky_(Image::parse(data.archive(kSkyArchive).entry(kSkyEntry))),
       blackHole_(Image::parse(data.archive(kArchive).entry(
           kFirstBlackHole + static_cast<std::size_t>(std::clamp(galaxy.mapSize, 0, static_cast<int>(kNebulaScales) - 1))))),
+      fleet_(Image::parse(data.archive(kArchive).entry(
+          kFleetLast - static_cast<std::size_t>(std::clamp(galaxy.mapSize, 0, static_cast<int>(kNebulaScales) - 1))))),
       fonts_(FontSet::parse(data.archive("FONTS.LBX").entry(0))),
       scale_(std::clamp(galaxy.mapSize, 0, static_cast<int>(kNebulaScales) - 1)) {
     if (galaxy.width <= 0 || galaxy.height <= 0) {
@@ -83,11 +112,30 @@ GalaxyMap::GalaxyMap(GameData& data, const Galaxy& galaxy, std::vector<std::size
                 Image::parse(stars.entry(kFirstStar + colour * kStarPictures + static_cast<std::size_t>(scale_) + size)));
         }
     }
+    const auto strings = parseStringList(data.archive("HESTRNGS.LBX").entry(0));
+    if (strings.size() <= kNoneText) {
+        throw FormatError("too few messages in HESTRNGS.LBX");
+    }
+    none_ = strings[kNoneText];
     const auto& sky = data.archive(kSkyArchive);
     for (std::size_t i = 0; i < kNebulaPictures; ++i) {
         nebulae_.push_back(
             Image::parse(sky.entry(kFirstNebula + i * kNebulaScales + static_cast<std::size_t>(scale_))));
     }
+}
+
+const Image& GalaxyMap::starPicture(const Star& s) const {
+    if (s.colour == StarColour::BlackHole) {
+        return blackHole_;
+    }
+    const auto colour = std::min<std::size_t>(static_cast<std::size_t>(s.colour), kStarColours - 2);
+    return starSizes_[colour * 3 + static_cast<std::size_t>(std::clamp(s.size, 0, 2))];
+}
+
+void GalaxyMap::setPanel(int stardate, const EmpireSummary& summary) {
+    stardate_ = stardate;
+    summary_ = summary;
+    panel_ = true;
 }
 
 int GalaxyMap::screenX(int x) const { return kMapX + x * kMapW / galaxy_.width; }
@@ -103,12 +151,21 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
         }
     }
     for (const Star& s : galaxy_.stars) {
-        const int x = screenX(s.x), y = screenY(s.y);
-        const Image& picture =
-            s.colour == StarColour::BlackHole
-                ? blackHole_
-                : starSizes_[static_cast<std::size_t>(s.colour) * 3 + static_cast<std::size_t>(std::clamp(s.size, 0, 2))];
-        picture.draw(0, canvas, x - (picture.width() - 1) / 2, y - (picture.height() - 1) / 2);
+        const Image& picture = starPicture(s);
+        picture.draw(0, canvas, screenX(s.x) - (picture.width() - 1) / 2, screenY(s.y) - (picture.height() - 1) / 2);
+    }
+    // The human's fleets, in their banner's colour.
+    if (!banners_.empty() && fleet_.frameCount() > 0) {
+        const auto frame = std::min(banners_[0], fleet_.frameCount() - 1);
+        const auto& offset = kFleetOffset[static_cast<std::size_t>(scale_)];
+        for (const int star : fleets_) {
+            if (star >= 0 && static_cast<std::size_t>(star) < galaxy_.stars.size()) {
+                const Star& s = galaxy_.stars[static_cast<std::size_t>(star)];
+                const Image& picture = starPicture(s);
+                fleet_.draw(frame, canvas, screenX(s.x) + (picture.width() - 1) / 2 + offset[0],
+                            screenY(s.y) - (picture.height() - 1) / 2 + offset[1]);
+            }
+        }
     }
     // At first the player knows only the name of their own home star.
     const Font& font = fonts_.font(kNameFont);
@@ -119,11 +176,13 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
         style.shades[1] = kBannerTextDark[banner];
         style.shades[2] = kBannerText[banner];
         style.spacing = kNameSpacing;
-        style.shadow = kNameOutline;
-        style.shadowAt = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
+        style.shadowShades[1] = kOutline1;
+        style.shadowShades[2] = kOutline2;
+        style.shadowAt = kOutlineOrder;
         // Centred on the letters, without the spacing after the last one.
         const int width = font.textWidth(s.name, kNameSpacing) - kNameSpacing;
-        font.draw(canvas, screenX(s.x) - width / 2, screenY(s.y) + kNameBelow, s.name, style);
+        font.draw(canvas, screenX(s.x) - width / 2,
+                  screenY(s.y) + kNameBelow[static_cast<std::size_t>(std::clamp(s.size, 0, 2))], s.name, style);
     }
     // The map leaves the frame opening's left, top and right edges black.
     for (int y = kView.y; y < kView.y + kView.h; ++y) {
@@ -134,6 +193,40 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
         }
     }
     frame_.draw(0, canvas);
+    if (panel_) {
+        drawPanel(canvas);
+    }
+}
+
+void GalaxyMap::drawPanel(Canvas& canvas) const {
+    const Font& font = fonts_.font(kNameFont);
+    TextStyle style;
+    style.shades[1] = kPanelShade1;
+    style.shades[2] = kPanelShade2;
+    style.spacing = kPanelSpacing;
+    style.shadowShades[1] = kOutline1;
+    style.shadowShades[2] = kOutline2;
+    style.shadowAt = kOutlineOrder;
+    const auto centred = [&](const std::string& text, int centre, int y) {
+        font.draw(canvas, centre - font.textWidth(text, kPanelSpacing) / 2, y, text, style);
+    };
+    const auto split = [&](const std::string& left, const std::string& right, const int (&at)[2], int y) {
+        font.draw(canvas, at[0] - font.textWidth(left, kPanelSpacing), y, left, style);
+        font.draw(canvas, at[1], y, right, style);
+    };
+    centred(std::to_string(stardate_ / 10) + "." + std::to_string(stardate_ % 10), kStardateCentre, kStardateY);
+    centred(std::to_string(summary_.money) + " BC", kPanelCentre, kMoneyY);
+    centred(signedNumber(summary_.income) + " BC", kPanelCentre, kIncomeY);
+    // Measured: the command points' total has no outline.
+    TextStyle plain = style;
+    plain.shadowShades = {};
+    font.draw(canvas, kCommandSplit[0] - font.textWidth(signedNumber(summary_.commandPoints - summary_.commandUsed), kPanelSpacing),
+              kCommandY, signedNumber(summary_.commandPoints - summary_.commandUsed), style);
+    font.draw(canvas, kCommandSplit[1], kCommandY, "(" + std::to_string(summary_.commandPoints) + ")", plain);
+    centred(signedNumber(summary_.food), kPanelCentre, kFoodY);
+    split(signedNumber(summary_.freighters - summary_.freightersUsed), "(" + std::to_string(summary_.freighters) + ")",
+          kFreightSplit, kFreightY);
+    centred(none_, kPanelCentre, kResearchY);
 }
 
 } // namespace hegemon

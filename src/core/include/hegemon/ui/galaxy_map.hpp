@@ -6,6 +6,7 @@
 
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
+#include "hegemon/rules/empire.hpp"
 #include "hegemon/rules/galaxy.hpp"
 #include "hegemon/ui/name_box.hpp"
 #include "hegemon/ui/rect.hpp"
@@ -13,6 +14,7 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace hegemon {
@@ -35,10 +37,19 @@ public:
     int screenX(int x) const;
     int screenY(int y) const;
 
+    // What the side panel shows: the stardate (in tenths of a year) and the
+    // human's empire.
+    void setPanel(int stardate, const EmpireSummary& summary);
+    // The stars where the human has ships.
+    void setFleets(std::vector<int> stars) { fleets_ = std::move(stars); }
+
     // Draws the whole screen and sets the colours it is drawn with.
     void draw(Canvas& canvas, Palette& palette) const;
 
 private:
+    void drawPanel(Canvas& canvas) const;
+    const Image& starPicture(const Star& s) const;
+
     const Galaxy& galaxy_;
     std::vector<std::size_t> banners_;
     Palette palette_;
@@ -47,6 +58,12 @@ private:
     std::vector<Image> nebulae_;                   // by picture, at this scale
     std::vector<Image> starSizes_;                 // colour * 3 + size
     Image blackHole_;
+    Image fleet_; // the fleet marker at this scale, a frame per banner
+    std::vector<int> fleets_;
+    std::string none_; // what the panel shows without a research project
+    int stardate_ = 35000;
+    EmpireSummary summary_;
+    bool panel_ = false;
     FontSet fonts_;
     int scale_ = 1; // which of the pictures' four scales: the map size
 };
