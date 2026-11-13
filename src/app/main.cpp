@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The Hegemon app. For now it opens a window at the original's 640×480,
-// scaled sharply to the window, finds the player's game files and shows the
-// picture of the main menu from them. Gamepads are opened as they are
-// plugged in, so their buttons work from the first screen on.
+// The Hegemon app: opens a window, turns mouse, keyboard and gamepad input
+// into commands for the current screen, and shows the 640×480 picture the
+// core draws, scaled sharply to the window. For now the only screen is the
+// main menu.
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #include "hegemon/data/image.hpp"
-#include "hegemon/data/lbx.hpp"
 #include "hegemon/data/reader.hpp"
+#include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
+#include "hegemon/ui/main_menu.hpp"
 #include "hegemon/version.hpp"
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -23,12 +25,19 @@ namespace {
 
 constexpr int kScreenW = 640;
 constexpr int kScreenH = 480;
+constexpr float kStickThreshold = 0.6f;
 
 struct App {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
-    SDL_Texture* picture = nullptr;
+    SDL_Texture* frame = nullptr;
+    std::unique_ptr<hegemon::GameData> data;
+    std::unique_ptr<hegemon::MainMenu> menu;
+    hegemon::Canvas canvas{kScreenW, kScreenH};
+    hegemon::Palette palette;
+    std::vector<std::uint8_t> rgba = std::vector<std::uint8_t>(static_cast<std::size_t>(kScreenW) * kScreenH * 4);
     std::vector<std::string> lines;
+    int stickDirection = 0; // left stick up (-1) or down (1) while held
 };
 
 // Where a gamedata folder may be: next to the program, in the current
@@ -52,56 +61,18 @@ std::optional<std::filesystem::path> findGameFolder() {
     return std::nullopt;
 }
 
-void checkGameFiles(App& app, const std::filesystem::path& folder) {
-    std::size_t archives = 0;
-    std::size_t entries = 0;
-    std::size_t failed = 0;
-    std::error_code ec;
-    for (const auto& file : std::filesystem::directory_iterator(folder, ec)) {
-        std::string ext = file.path().extension().string();
-        for (auto& c : ext) {
-            c = static_cast<char>(SDL_toupper(c));
-        }
-        if (ext != ".LBX") {
-            continue;
-        }
-        try {
-            const auto archive = hegemon::LbxArchive::load(file.path());
-            ++archives;
-            entries += archive.size();
-        } catch (const hegemon::FormatError&) {
-            ++failed; // the videos, until they get their own reader
-        }
+// What a choice in the main menu does. Only Quit leads anywhere yet.
+SDL_AppResult choose(hegemon::MainMenu::Choice choice) {
+    if (choice == hegemon::MainMenu::Choice::Quit) {
+        return SDL_APP_SUCCESS;
     }
-    app.lines.push_back("Game files: " + folder.string());
-    app.lines.push_back(std::to_string(archives) + " archives with " + std::to_string(entries) + " entries read.");
-    app.lines.push_back(std::to_string(failed) + " files are videos or could not be read.");
+    SDL_Log("This part of the game is not there yet.");
+    return SDL_APP_CONTINUE;
 }
 
-// The picture behind the original's main menu, in its own colours.
-void showMainMenu(App& app, const std::filesystem::path& folder) {
-    const auto file = hegemon::findFileNoCase(folder, "MAINMENU.LBX");
-    if (!file) {
-        return;
-    }
-    try {
-        const auto archive = hegemon::LbxArchive::load(*file);
-        const auto image = hegemon::Image::parse(archive.entry(1));
-        hegemon::Palette palette;
-        image.applyPalette(palette);
-        hegemon::Canvas canvas(kScreenW, kScreenH);
-        image.draw(0, canvas);
-        std::vector<std::uint8_t> rgba(static_cast<std::size_t>(kScreenW) * kScreenH * 4);
-        hegemon::toRgba(canvas, palette, rgba);
-        app.picture = SDL_CreateTexture(app.renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, kScreenW,
-                                        kScreenH);
-        if (app.picture != nullptr) {
-            SDL_SetTextureScaleMode(app.picture, SDL_SCALEMODE_NEAREST);
-            SDL_UpdateTexture(app.picture, nullptr, rgba.data(), kScreenW * 4);
-        }
-    } catch (const hegemon::FormatError& e) {
-        app.lines.push_back(std::string("The main menu picture could not be read: ") + e.what());
-    }
+// The mouse position in the 640×480 picture.
+void screenPoint(App& app, SDL_Event* event) {
+    SDL_ConvertEventToRenderCoordinates(app.renderer, event);
 }
 
 } // namespace
@@ -121,8 +92,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     }
     SDL_SetRenderLogicalPresentation(app->renderer, kScreenW, kScreenH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     SDL_SetRenderVSync(app->renderer, 1);
+    app->frame =
+        SDL_CreateTexture(app->renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, kScreenW, kScreenH);
+    SDL_SetTextureScaleMode(app->frame, SDL_SCALEMODE_NEAREST);
 
-    app->lines.push_back("Hegemon " + std::string(hegemon::kVersion));
     std::optional<std::filesystem::path> folder;
     if (argc > 1) {
         folder = std::filesystem::path(argv[1]);
@@ -130,36 +103,87 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         folder = findGameFolder();
     }
     if (folder && hegemon::isGameFolder(*folder)) {
-        checkGameFiles(*app, *folder);
-        showMainMenu(*app, *folder);
+        try {
+            app->data = std::make_unique<hegemon::GameData>(*folder);
+            app->menu = std::make_unique<hegemon::MainMenu>(*app->data);
+        } catch (const hegemon::FormatError& e) {
+            app->menu.reset();
+            app->lines.push_back(std::string("Your game files could not be read: ") + e.what());
+        }
     } else {
         app->lines.push_back("Put your own copy of the original game in a folder");
         app->lines.push_back("named gamedata next to Hegemon and start it again.");
     }
-    app->lines.push_back("");
-    app->lines.push_back("Esc or the gamepad's B button closes this window.");
-    for (const auto& line : app->lines) {
-        SDL_Log("%s", line.c_str());
+    if (!app->menu) {
+        app->lines.push_back("");
+        app->lines.push_back("Esc or the gamepad's B button closes this window.");
+        for (const auto& line : app->lines) {
+            SDL_Log("%s", line.c_str());
+        }
     }
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    (void)appstate;
+    auto* app = static_cast<App*>(appstate);
+    auto* menu = app->menu.get();
     switch (event->type) {
     case SDL_EVENT_QUIT:
         return SDL_APP_SUCCESS;
     case SDL_EVENT_GAMEPAD_ADDED:
         SDL_OpenGamepad(event->gdevice.which);
         break;
+    case SDL_EVENT_MOUSE_MOTION:
+        SDL_ShowCursor();
+        if (menu != nullptr) {
+            screenPoint(*app, event);
+            menu->pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (menu != nullptr && event->button.button == SDL_BUTTON_LEFT) {
+            screenPoint(*app, event);
+            if (const auto choice = menu->click(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                return choose(*choice);
+            }
+        }
+        break;
     case SDL_EVENT_KEY_DOWN:
-        if (event->key.key == SDLK_ESCAPE) {
-            return SDL_APP_SUCCESS;
+        if (menu == nullptr) {
+            return event->key.key == SDLK_ESCAPE ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
+        }
+        if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            menu->moveHighlight(event->key.key == SDLK_UP ? -1 : 1);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            if (const auto choice = menu->activate()) {
+                return choose(*choice);
+            }
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
-            return SDL_APP_SUCCESS;
+        SDL_HideCursor();
+        if (menu == nullptr) {
+            return event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
+        }
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
+            menu->moveHighlight(-1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            menu->moveHighlight(1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            if (const auto choice = menu->activate()) {
+                return choose(*choice);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        if (menu != nullptr && event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
+            const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
+            if (direction != 0 && direction != app->stickDirection) {
+                SDL_HideCursor();
+                menu->moveHighlight(direction);
+            }
+            app->stickDirection = direction;
         }
         break;
     default:
@@ -172,16 +196,18 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     auto* app = static_cast<App*>(appstate);
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
-    if (app->picture != nullptr) {
-        SDL_RenderTexture(app->renderer, app->picture, nullptr, nullptr);
-        SDL_RenderPresent(app->renderer);
-        return SDL_APP_CONTINUE;
-    }
-    SDL_SetRenderDrawColor(app->renderer, 220, 220, 220, 255);
-    float y = 16;
-    for (const auto& line : app->lines) {
-        SDL_RenderDebugText(app->renderer, 16, y, line.c_str());
-        y += 12;
+    if (app->menu) {
+        app->menu->draw(app->canvas, app->palette);
+        hegemon::toRgba(app->canvas, app->palette, app->rgba);
+        SDL_UpdateTexture(app->frame, nullptr, app->rgba.data(), kScreenW * 4);
+        SDL_RenderTexture(app->renderer, app->frame, nullptr, nullptr);
+    } else {
+        SDL_SetRenderDrawColor(app->renderer, 220, 220, 220, 255);
+        float y = 16;
+        for (const auto& line : app->lines) {
+            SDL_RenderDebugText(app->renderer, 16, y, line.c_str());
+            y += 12;
+        }
     }
     SDL_RenderPresent(app->renderer);
     return SDL_APP_CONTINUE;
@@ -189,8 +215,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
 void SDL_AppQuit(void* appstate, SDL_AppResult) {
     auto* app = static_cast<App*>(appstate);
-    if (app->picture != nullptr) {
-        SDL_DestroyTexture(app->picture);
+    if (app->frame != nullptr) {
+        SDL_DestroyTexture(app->frame);
     }
     delete app;
 }

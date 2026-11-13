@@ -10,9 +10,10 @@ screens, computer players and savegames, scaled sharply to any screen and
 with gamepad, mouse, keyboard and touch controls.
 
 > [!NOTE]
-> **Status: just started.** Hegemon finds your game files and shows the
-> picture of the main menu from them, in the original's colours. There is
-> nothing to play yet.
+> **Status: just started.** Hegemon shows the original's main menu from your
+> files: Continue and Load Game are only usable when you have savegames, as
+> in the original, and the buttons light up under the mouse or the gamepad.
+> Quit Game closes Hegemon; the other buttons don't lead anywhere yet.
 
 Hegemon is not affiliated with or endorsed by the makers of the original
 game. It contains none of the original game's files: you need your own copy.
@@ -37,14 +38,16 @@ and download the one for your system at the bottom of the page.
 
 Copy the folder of your installed game (the one with the `.LBX` files) into a
 folder named `gamedata` next to the program, or start it with the folder:
-`./Hegemon path/to/game`. Hegemon then shows the main menu's picture from
-your files. Without game files it says where to put them.
+`./Hegemon path/to/game`. Hegemon then shows the main menu from your files.
+Without game files it says where to put them.
 
 ## Controls
 
-| Action | Keyboard | Gamepad |
-| --- | --- | --- |
-| Close the window | Esc | B |
+| Action | Mouse | Keyboard | Gamepad |
+| --- | --- | --- | --- |
+| Choose a button in the main menu | Point and click | Up / Down, then Enter | D-pad or left stick, then A |
+| Close Hegemon | Quit Game | | |
+| Close the message when there are no game files | | Esc | B |
 
 ## License
 
