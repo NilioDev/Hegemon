@@ -9,7 +9,9 @@
 #include "hegemon/rules/races.hpp"
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
+#include "hegemon/ui/product_picture.hpp"
 
+#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -222,4 +224,41 @@ HGM_TEST("Production: the colony screen's box of what is built") {
     const ColonyScreen screen(data, game, economy, 0);
     HGM_CHECK(screen.productText() == "Spy" && screen.progressText() == "12 / 100");
     HGM_CHECK(screen.turnsText() == std::to_string((88 + made - 1) / made) + " turns");
+}
+
+HGM_TEST("Build list: the pictures of the products") {
+    const fs::path folder = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(folder)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(folder);
+    using Box = ProductPicture::Box;
+    using At = std::array<int, 2>;
+    // Measured on the original.
+    const ProductPicture ship(data, kColonyShip, 0);
+    HGM_CHECK(!ship.empty() && ship.position(Box::BuildList).has_value());
+    const ProductPicture spy(data, kSpy, 0);
+    const At spyAt = *spy.position(Box::BuildList), spyColony = *spy.position(Box::Colony);
+    HGM_CHECK(spyColony[0] - spyAt[0] == 334 && spyColony[1] - spyAt[1] == 21);
+    const ProductPicture trade(data, kTradeGoods, 0);
+    HGM_CHECK(!trade.empty() && !trade.position(Box::Colony).has_value());
+    // Housing: its picture's left at 226 (its shadow), the rest 227 to 260.
+    const ProductPicture housing(data, kHousing, 0);
+    HGM_CHECK(!housing.empty() && (*housing.position(Box::BuildList))[0] == 226);
+    const ProductPicture base(data, "colony_base", 0);
+    HGM_CHECK(!base.empty() && (*base.position(Box::BuildList) == At{223, 47}));
+    HGM_CHECK(ProductPicture(data, "nothing_like_it", 0).empty());
+
+    // Drawn only inside the box.
+    Canvas canvas(640, 480, 7);
+    Palette palette;
+    base.draw(canvas, Box::Colony, palette);
+    int outside = 0, inside = 0;
+    for (int y = 0; y < 480; ++y) {
+        for (int x = 0; x < 640; ++x) {
+            const bool in = x >= 522 && x < 636 && y >= 15 && y < 100;
+            (in ? inside : outside) += canvas.at(x, y) != 7 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(outside == 0 && inside > 300);
 }

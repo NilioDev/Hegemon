@@ -294,6 +294,7 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
         if (!c.buildList.empty()) {
             const std::string& what = c.buildList.front();
             product_ = productName(data, what);
+            picture_.emplace(data, what, game.players.at(static_cast<std::size_t>(c.player)).race);
             cost = productCost(data.parameters(), what);
             const ColonyOutput made = economy.output(game, c);
             const int perTurn = std::max(0, made.production - made.upkeep);
@@ -514,6 +515,9 @@ void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
     style.spacing = kSpacing;
     const Font& titleFont = fonts_.font(kTitleFont);
     titleFont.draw(canvas, kTitleCentre - titleFont.textWidth(title_, kSpacing) / 2, kTitleY, title_, style);
+    if (picture_) {
+        picture_->draw(canvas, ProductPicture::Box::Colony, palette);
+    }
     {
         TextStyle box;
         box.shades[1] = kShade1;

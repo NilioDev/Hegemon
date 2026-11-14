@@ -8,6 +8,7 @@
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
 #include "hegemon/rules/empire.hpp"
+#include "hegemon/ui/product_picture.hpp"
 #include "hegemon/ui/rect.hpp"
 
 #include <array>
@@ -93,6 +94,7 @@ private:
     std::array<std::string, kRightRows> right_;
     std::vector<std::pair<std::string, std::string>> names_; // product, name
     std::vector<std::pair<std::string, int>> costs_;
+    std::vector<std::pair<std::string, ProductPicture>> pictures_;
     std::string title_;
     std::string deleteFormat_, costFormat_, timeFormat_;
     int production_ = 0;

@@ -160,9 +160,32 @@ name in font 1 centred on 578 at y 38, "%d turns" (HESTRNGS 226, also for
 one turn) from (531, 103) and "made / cost" ending at 626 in font 0, one
 pixel between letters, shades 245 and 253, a black shadow. The turns are
 what is left over the colony's production a turn, rounded up. With nothing
-to build it reads "1 turns" and "0 / 0". Still to do: the product's
-picture in the box, the bar at its bottom right, and the box's frame,
-which is drawn lighter while something is built.
+to build it reads "1 turns" and "0 / 0". Still to do: the bar at its
+bottom right, and the box's frame, which is drawn lighter while something
+is built.
+
+## Product pictures
+
+The box at the top of the build list shows the picture of the product
+under the pointer, and the colony screen's box that of the first of the
+build list (measured pixel for pixel on the original):
+
+- Colony, outpost and transport ships and freighters: SHIPS.LBX entries 45,
+  46, 47 and 48 at (218, 32). They are drawn for the colours of FONTS.LBX
+  entry 1, with the player colours 192 to 223 as two ramps of 16 greys (six
+  bits: 5, 9, 13, 17, 20, 24, 28, 32, 36, 40, 43, 47, 51, 55, 59, 63), colour
+  1 the darkest of them and 31 white, and shown in the screen's colours
+  nearest to those; its unused colours (pure green, such as 224) show the
+  screen's own.
+- A spy: RACEICON.LBX entry 13 × race + 11 at (230, 42).
+- Trade goods: COLONY2.LBX entry 7 at (235, 54); the colony screen's box
+  shows none.
+- A building: its landscape picture at place 30 (housing: picture 13), its
+  shadow darkening what is under it as on the landscape. What is not shadow
+  is centred on x 244 (left = 244 − width / 2) with its bottom row at 92.
+- In the colony screen's box everything is 334 pixels to the right and 21
+  down, a building 335 and 13, and cut off at the box: (522, 15) to (635,
+  99).
 
 ## Buttons
 
