@@ -24,8 +24,9 @@ gamepad, mouse, keyboard and touch controls.
 > (or Enter, or Start on a gamepad) ends the turn: the first time it asks
 > which field to research, on the Select New Research screen with your race's
 > scientist, and each turn adds your income and research, with the panel
-> showing about how many turns the project takes. Colonies, building and the
-> rest of the game come next; Esc on the galaxy map goes back to the main
+> showing about how many turns the project takes. After the turn your home
+> colony is shown with its landscape, and it grows as in the original.
+> Building and the rest of the colony screen come next; Esc on the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
 > light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,

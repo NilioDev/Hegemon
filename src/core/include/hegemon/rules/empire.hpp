@@ -28,6 +28,7 @@ struct Colony {
     int planet = 0;
     std::array<int, kJobs> jobs{}; // how many people do each job
     std::vector<std::string> buildings; // by the names of the fan patch's building table
+    int growth = 0; // thousands of people grown towards the next one
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }
     bool has(std::string_view building) const;
@@ -102,6 +103,10 @@ public:
     int farmerFood2(const Player& player, const Planet& planet) const;
     // Research a scientist makes, in hundredths, with the government.
     int scientistResearch100(const Player& player, const Planet& planet) const;
+    // How many of the race's people the planet can hold.
+    int maxPopulation(const Player& player, const Planet& planet) const;
+    // Thousands of people a colony grows in a turn.
+    int growth(const Player& player, const Planet& planet, int population) const;
 
 private:
     int foodTotal2(const Player& player, const Planet& planet, int farmers) const;
@@ -116,8 +121,12 @@ private:
 // half times its cost (measured), at least one.
 int researchTurns(int cost, int researched, int perTurn);
 
-// Ends the turn: the stardate moves on a tenth of a year, and each player
-// gets the turn's income and research. A field whose research is done is
+// A planet's name: its star's, then "Prime" (`prime`, from HESTRNGS.LBX)
+// for the first orbit or a Roman number for the others.
+std::string planetName(const Galaxy& galaxy, int planet, const std::string& prime);
+
+// Ends the turn: the stardate moves on a tenth of a year, each colony
+// grows, and each player gets the turn's income and research. A field whose research is done is
 // learnt (see docs/rules/research.md) and the player has no project then.
 void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random);
 

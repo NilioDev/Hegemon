@@ -21,6 +21,7 @@
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/rules/tech.hpp"
+#include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/race_select.hpp"
 #include "hegemon/ui/research_select.hpp"
@@ -64,6 +65,7 @@ struct App {
     std::unique_ptr<hegemon::TechTree> tree;
     std::unique_ptr<hegemon::Random> gameRandom;
     std::unique_ptr<hegemon::ResearchSelectScreen> research; // when the turn ends without a project
+    std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -348,6 +350,7 @@ void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
 void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
+    app.colony.reset();
     app.research.reset();
     app.map.reset();
     app.game.reset();
@@ -461,6 +464,52 @@ void endTurn(App& app) {
     }
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
+    // Measured: with nothing to build the original shows the home colony
+    // after the turn. Hegemon has no building yet, so it always does.
+    for (std::size_t i = 0; i < app.game->colonies.size(); ++i) {
+        if (app.game->colonies[i].player == 0) {
+            app.colony = std::make_unique<hegemon::ColonyScreen>(
+                *app.data, *app.game, hegemon::Economy(app.data->parameters()), i);
+            app.pointer->useEntry(hegemon::ColonyScreen::kPointerEntry);
+            break;
+        }
+    }
+}
+
+void leaveColony(App& app) {
+    app.colony.reset();
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+}
+
+// The colony screen: Return (also Esc, Enter, or the gamepad's A or B)
+// goes back to the map.
+SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            app.colony->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT &&
+            app.colony->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+            leaveColony(app);
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            leaveColony(app);
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH || event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            leaveColony(app);
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 void chooseResearch(App& app, int field) {
@@ -540,6 +589,9 @@ SDL_AppResult researchEvent(App& app, SDL_Event* event) {
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (app.research) {
         return researchEvent(app, event);
+    }
+    if (app.colony) {
+        return colonyEvent(app, event);
     }
     if (app.homeName) {
         auto& box = *app.homeName;
@@ -908,7 +960,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->research) {
+        if (app->colony) {
+            app->colony->draw(app->canvas, app->palette);
+        } else if (app->research) {
             app->research->tick(elapsed);
             app->research->draw(app->canvas, app->palette);
         } else if (app->map) {

@@ -11,6 +11,7 @@ add_library(hgm_core STATIC
     src/ui/name_box.cpp
     src/ui/galaxy_map.cpp
     src/ui/research_select.cpp
+    src/ui/colony_screen.cpp
     src/ui/banner_select.cpp
     src/rules/races.cpp
     src/data/lbx.cpp

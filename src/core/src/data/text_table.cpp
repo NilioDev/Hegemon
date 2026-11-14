@@ -49,4 +49,51 @@ std::vector<std::string> parseStringList(std::span<const std::uint8_t> entry) {
     return out;
 }
 
+std::string formatMessage(std::string_view pattern, std::initializer_list<MessageValue> values) {
+    std::string out;
+    auto next = values.begin();
+    for (std::size_t i = 0; i < pattern.size(); ++i) {
+        if (pattern[i] != '%' || i + 1 >= pattern.size()) {
+            out.push_back(pattern[i]);
+            continue;
+        }
+        ++i;
+        if (pattern[i] == '%') {
+            out.push_back('%');
+            continue;
+        }
+        bool plus = false, zero = false;
+        for (; i < pattern.size() && (pattern[i] == '+' || pattern[i] == '0'); ++i) {
+            plus = plus || pattern[i] == '+';
+            zero = zero || pattern[i] == '0';
+        }
+        std::size_t width = 0;
+        for (; i < pattern.size() && pattern[i] >= '0' && pattern[i] <= '9' && width < 100; ++i) {
+            width = width * 10 + static_cast<std::size_t>(pattern[i] - '0');
+        }
+        if (i >= pattern.size()) {
+            break;
+        }
+        const char kind = pattern[i];
+        const MessageValue* value = next != values.end() ? &*next++ : nullptr;
+        std::string text;
+        if (kind == 'd' && value != nullptr && std::holds_alternative<long long>(*value)) {
+            const long long n = std::get<long long>(*value);
+            text = std::to_string(n < 0 ? -n : n);
+            const std::string sign = n < 0 ? "-" : (plus ? "+" : "");
+            if (zero && text.size() + sign.size() < width) {
+                text.insert(0, width - text.size() - sign.size(), '0');
+            }
+            text.insert(0, sign);
+        } else if (kind == 's' && value != nullptr && std::holds_alternative<std::string>(*value)) {
+            text = std::get<std::string>(*value);
+        }
+        if (text.size() < width) {
+            text.insert(0, width - text.size(), ' ');
+        }
+        out += text;
+    }
+    return out;
+}
+
 } // namespace hegemon
