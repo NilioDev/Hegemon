@@ -66,6 +66,12 @@ constexpr std::size_t kPeoplePerRace = 13;
 constexpr std::array<std::size_t, 3> kPersonEntry = {1, 3, 5};
 constexpr int kPeopleX = 310, kPersonStep = 30, kPeopleWidth = 180;
 constexpr std::array<int, 3> kPeopleY = {62, 92, 122};
+// A job row takes the people from 2 pixels above them down to the next row
+// and to the panel's right side (assumed from the panel's lines).
+constexpr int kRowTop = -2, kRowHeight = 30, kRowRight = 515;
+// People being moved are drawn beside the pointer, 15 pixels apart, in the
+// job of the row under it (seen; the distances are assumed).
+constexpr int kHeldDX = 8, kHeldDY = -10, kHeldStep = 15;
 
 // `amount` in icons of ten first, then units.
 void addIcons(std::vector<int>& row, int amount, int unit, int ten) {
@@ -427,8 +433,94 @@ std::string ColonyScreen::buyText(const Purchase& p) const {
     return {};
 }
 
+namespace {
+
+int personStep(int n) {
+    return n < 2 ? kPersonStep : std::min(kPersonStep, kPeopleWidth / (n - 1));
+}
+
+} // namespace
+
+std::size_t ColonyScreen::rowAt(int y, bool& inside) const {
+    for (std::size_t j = 0; j < kPeopleY.size(); ++j) {
+        const int top = kPeopleY[j] + kRowTop;
+        if (y >= top && y < top + kRowHeight) {
+            inside = true;
+            return j;
+        }
+    }
+    inside = false;
+    return 0;
+}
+
+int ColonyScreen::personAt(int x, int y, std::size_t& job) const {
+    bool inside = false;
+    job = rowAt(y, inside);
+    if (!inside || x < kPeopleX || x >= kRowRight) {
+        return -1;
+    }
+    const int n = jobs_[job];
+    const int step = personStep(n);
+    const int k = (x - kPeopleX) / step;
+    return k < n ? k : -1;
+}
+
+void ColonyScreen::pointerMoved(int x, int y) {
+    pointerX_ = x;
+    pointerY_ = y;
+}
+
+ColonyScreen::Action ColonyScreen::drop(std::size_t row) {
+    const std::size_t from = heldJob_;
+    const int count = heldCount_;
+    heldCount_ = 0;
+    keyboardHold_ = false;
+    if (row == from || count <= 0) {
+        return Action::None;
+    }
+    jobs_[from] -= count;
+    jobs_[row] += count;
+    return Action::Jobs;
+}
+
+void ColonyScreen::moveCursor(int step) {
+    const int n = static_cast<int>(kPeopleY.size());
+    cursor_ = static_cast<std::size_t>(((static_cast<int>(cursor_) + step) % n + n) % n);
+}
+
+ColonyScreen::Action ColonyScreen::pickOrDrop() {
+    if (heldCount_ > 0) {
+        return drop(cursor_);
+    }
+    if (jobs_[cursor_] > 0) {
+        heldJob_ = cursor_;
+        heldCount_ = 1;
+        keyboardHold_ = true;
+    }
+    return Action::None;
+}
+
+std::pair<int, int> ColonyScreen::cursorPoint() const {
+    int n = jobs_[cursor_];
+    if (heldCount_ > 0 && heldJob_ == cursor_) {
+        n -= heldCount_;
+    }
+    const int k = std::max(0, n - 1);
+    return {kPeopleX + personStep(n) * k + kPersonStep / 2, kPeopleY[cursor_] + kPersonStep / 2};
+}
+
 void ColonyScreen::press(int x, int y) {
     held_ = Rect{};
+    pointerMoved(x, y);
+    std::size_t job = 0;
+    const int k = personAt(x, y, job);
+    if (k >= 0) {
+        // Measured: the person pressed is picked up with all to its right.
+        heldJob_ = job;
+        heldCount_ = jobs_[job] - k;
+        keyboardHold_ = false;
+        return;
+    }
     for (const Rect& r : {kReturnButton, kChangeButton, kBuyButton}) {
         if (r.contains(x, y)) {
             held_ = r;
@@ -437,6 +529,16 @@ void ColonyScreen::press(int x, int y) {
 }
 
 ColonyScreen::Action ColonyScreen::release(int x, int y) {
+    pointerMoved(x, y);
+    if (heldCount_ > 0 && !keyboardHold_) {
+        bool inside = false;
+        const std::size_t row = rowAt(y, inside);
+        if (!inside || x < kPeopleX - kPersonStep || x >= kRowRight) {
+            heldCount_ = 0;
+            return Action::None;
+        }
+        return drop(row);
+    }
     const Rect held = held_;
     held_ = Rect{};
     if (!held.contains(x, y)) {
@@ -501,10 +603,30 @@ void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
     icons_[static_cast<std::size_t>(kGovernmentIcon + government_)].draw(0, canvas, kGovernmentX, kGovernmentY);
     for (std::size_t j = 0; j < people_.size(); ++j) {
         // Closer together when they don't fit (assumed).
-        const int n = jobs_[j];
-        const int step = n < 2 ? kPersonStep : std::min(kPersonStep, kPeopleWidth / (n - 1));
+        const int n = jobs_[j] - (heldCount_ > 0 && heldJob_ == j ? heldCount_ : 0);
+        const int step = personStep(jobs_[j]);
         for (int k = 0; k < n; ++k) {
             people_[j].draw(0, canvas, kPeopleX + step * k, kPeopleY[j]);
+        }
+    }
+    if (heldCount_ > 0) {
+        int x = pointerX_ + kHeldDX, y = pointerY_ + kHeldDY;
+        std::size_t job = heldJob_;
+        if (keyboardHold_) {
+            // Hegemon: after the chosen row's people.
+            job = cursor_;
+            const int n = jobs_[cursor_] - (heldJob_ == cursor_ ? heldCount_ : 0);
+            x = kPeopleX + personStep(jobs_[cursor_]) * n;
+            y = kPeopleY[cursor_];
+        } else {
+            bool inside = false;
+            const std::size_t row = rowAt(pointerY_, inside);
+            if (inside) {
+                job = row;
+            }
+        }
+        for (int k = 0; k < heldCount_; ++k) {
+            people_[job].draw(0, canvas, x + kHeldStep * k, y);
         }
     }
 

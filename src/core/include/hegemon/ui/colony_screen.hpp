@@ -14,6 +14,7 @@
 #include "hegemon/ui/rect.hpp"
 
 #include <array>
+#include <utility>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -68,9 +69,28 @@ public:
     static int iconStep(std::size_t places);
 
     // The mouse: what a button let go over does.
-    enum class Action : std::uint8_t { None, Return, Change, Buy };
+    // Jobs: people were moved to another job; jobs() tells the new numbers.
+    enum class Action : std::uint8_t { None, Return, Change, Buy, Jobs };
     void press(int x, int y);
     Action release(int x, int y);
+    void pointerMoved(int x, int y);
+
+    // The people in each job (farmers, workers, scientists), after a move.
+    const std::array<int, 3>& jobs() const { return jobs_; }
+    // Where a person of a job row is, (x, y) its top left; -1 when the place
+    // is not on a person.
+    int personAt(int x, int y, std::size_t& job) const;
+    // The people held, being moved: their job and how many, 0 for none.
+    std::size_t heldJob() const { return heldJob_; }
+    int heldCount() const { return heldCount_; }
+
+    // Hegemon's keyboard and gamepad: choose a job row, then pick up its
+    // last person, choose the row to move it to and put it down there.
+    std::size_t cursorRow() const { return cursor_; }
+    void moveCursor(int step);
+    Action pickOrDrop();
+    // Where the pointer goes for the chosen row.
+    std::pair<int, int> cursorPoint() const;
 
     // The sky, the landscape and its buildings, without the panels: the
     // build list shows it behind its own.
@@ -124,6 +144,14 @@ private:
     std::optional<ProductPicture> picture_; // of what is built
     std::string buyQuestion_, buyShort_, buyNotBuyable_, buyThisTurn_, buyNothing_;
     Rect held_{};
+    // People being moved, with the mouse or the keyboard.
+    std::size_t heldJob_ = 0;
+    int heldCount_ = 0;
+    bool keyboardHold_ = false;
+    int pointerX_ = 0, pointerY_ = 0;
+    std::size_t cursor_ = 0;
+    std::size_t rowAt(int y, bool& inside) const;
+    Action drop(std::size_t row);
 };
 
 } // namespace hegemon

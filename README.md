@@ -31,7 +31,7 @@ gamepad, mouse, keyboard and touch controls.
 > you choose the next field. After the first turn your
 > home colony is shown with its landscape, buildings and roads, the planets
 > of its system, its rows of money, food, production and research, its
-> government and its people at work, and it grows as in the original.
+> government and its people at work, whom you move between farming, working and research by dragging them, and it grows as in the original.
 > Change opens its build list, where you put trade goods, housing, ships and
 > spies in the colony's list of up to seven things to build and see what each
 > costs and how many turns it takes, with the original's picture and description of each. Each turn the colony builds the first of
@@ -88,7 +88,10 @@ what is missing.
 | Enter your ruler's name | Accept | Type, Backspace, Enter; Esc goes back | A takes the offered name; B goes back |
 | Choose your banner colour | Click a banner | Enter clicks where the pointer is, Esc goes back | D-pad, then A; B goes back |
 | Name your home star | Accept | Type, Backspace, Enter | A takes the offered name |
-| Leave the colony screen | Return | Esc or Enter | A or B |
+| Choose the next research | Click a field's application | Arrow keys choose the field, Page Up / Page Down the application, then Enter | D-pad chooses the field, LB / RB the application, then A |
+| Close the research done screen | Click | Any key | Any button |
+| Leave the colony screen | Return | Esc or Enter | B |
+| Move people to another job | Drag a person (and those to its right) to another row | Up / Down choose a row, Space picks up its last person, Up / Down choose the new row, Space puts it down | D-pad up / down, then A, the same way |
 | Open the colony's build list | Change | C | X |
 | Buy what the colony builds | Buy | B | Y |
 | Answer a question | Yes or No | Enter or Y, Esc or N | A or B |

@@ -551,9 +551,11 @@ void openBuildList(App& app) {
 
 // The colony screen shows what the colony builds now.
 void refreshColony(App& app) {
+    const std::size_t cursor = app.colony ? app.colony->cursorRow() : 0;
     try {
         app.colony = std::make_unique<hegemon::ColonyScreen>(
             *app.data, *app.game, hegemon::Economy(app.data->parameters()), app.colonyIndex);
+        app.colony->moveCursor(static_cast<int>(cursor));
     } catch (const hegemon::FormatError& e) {
         SDL_Log("The colony screen could not be read: %s", e.what());
     }
@@ -735,6 +737,39 @@ SDL_AppResult buildListEvent(App& app, SDL_Event* event) {
 // The colony screen: Return (also Esc, Enter, or the gamepad's A or B)
 // goes back to the map; Change (also C, or the gamepad's X) opens the
 // build list; Buy (also B, or the gamepad's Y) buys what is built.
+// People moved to other jobs: the colony works on with them.
+void moveJobs(App& app) {
+    app.game->colonies.at(app.colonyIndex).jobs = app.colony->jobs();
+    refreshColony(app);
+    updatePanel(app);
+}
+
+void colonyAction(App& app, hegemon::ColonyScreen::Action action) {
+    switch (action) {
+    case hegemon::ColonyScreen::Action::Return:
+        leaveColony(app);
+        break;
+    case hegemon::ColonyScreen::Action::Change:
+        openBuildList(app);
+        break;
+    case hegemon::ColonyScreen::Action::Buy:
+        startBuy(app);
+        break;
+    case hegemon::ColonyScreen::Action::Jobs:
+        moveJobs(app);
+        break;
+    case hegemon::ColonyScreen::Action::None:
+        break;
+    }
+}
+
+void colonyCursor(App& app, int step) {
+    app.colony->moveCursor(step);
+    const auto [x, y] = app.colony->cursorPoint();
+    app.pointer->move(x, y);
+    app.pointer->hide();
+}
+
 SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
     if (app.buildList) {
         return buildListEvent(app, event);
@@ -748,21 +783,13 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
             app.colony->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
         }
         break;
+    case SDL_EVENT_MOUSE_MOTION:
+        app.colony->pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (event->button.button == SDL_BUTTON_LEFT) {
-            switch (app.colony->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
-            case hegemon::ColonyScreen::Action::Return:
-                leaveColony(app);
-                break;
-            case hegemon::ColonyScreen::Action::Change:
-                openBuildList(app);
-                break;
-            case hegemon::ColonyScreen::Action::Buy:
-                startBuy(app);
-                break;
-            case hegemon::ColonyScreen::Action::None:
-                break;
-            }
+            colonyAction(app,
+                         app.colony->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
         }
         break;
     case SDL_EVENT_KEY_DOWN:
@@ -772,11 +799,20 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
             openBuildList(app);
         } else if (event->key.key == SDLK_B) {
             startBuy(app);
+        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            colonyCursor(app, event->key.key == SDLK_UP ? -1 : 1);
+        } else if (event->key.key == SDLK_SPACE) {
+            colonyAction(app, app.colony->pickOrDrop());
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH || event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
             leaveColony(app);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            colonyAction(app, app.colony->pickOrDrop());
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ||
+                   event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            colonyCursor(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : 1);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_WEST) {
             openBuildList(app);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) {

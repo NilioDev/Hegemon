@@ -7,6 +7,7 @@
 #include "hegemon/rules/races.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 
+#include <array>
 #include <filesystem>
 #include <vector>
 
@@ -60,6 +61,34 @@ HGM_TEST("Colony screen: the title, the population and Return") {
     HGM_CHECK(screen.release(100, 100) == ColonyScreen::Action::None);
     screen.press(550, 132);
     HGM_CHECK(screen.release(551, 133) == ColonyScreen::Action::Change);
+
+    // Moving people: the first farmer is picked up with all to its right
+    // and put with the workers.
+    const std::array<int, 3> start = screen.jobs();
+    HGM_CHECK(start[0] >= 1 && start[2] >= 1);
+    std::size_t job = 9;
+    HGM_CHECK(screen.personAt(315, 72, job) == 0 && job == 0);
+    HGM_CHECK(screen.personAt(509, 72, job) == -1);
+    screen.press(315, 72);
+    HGM_CHECK(screen.heldJob() == 0 && screen.heldCount() == start[0]);
+    screen.pointerMoved(382, 100);
+    screen.draw(canvas, palette);
+    HGM_CHECK(screen.release(382, 100) == ColonyScreen::Action::Jobs);
+    const std::array<int, 3> moved = {0, start[1] + start[0], start[2]};
+    HGM_CHECK(screen.jobs() == moved && screen.heldCount() == 0);
+    // Let go outside the rows: nothing moves.
+    screen.press(315, 132);
+    HGM_CHECK(screen.release(100, 300) == ColonyScreen::Action::None);
+    HGM_CHECK(screen.jobs() == moved);
+    // The keyboard: a scientist to the farmers.
+    screen.moveCursor(-1);
+    HGM_CHECK(screen.cursorRow() == 2);
+    HGM_CHECK(screen.pickOrDrop() == ColonyScreen::Action::None && screen.heldCount() == 1);
+    screen.moveCursor(1);
+    screen.draw(canvas, palette);
+    HGM_CHECK(screen.pickOrDrop() == ColonyScreen::Action::Jobs);
+    const std::array<int, 3> back = {1, moved[1], start[2] - 1};
+    HGM_CHECK(screen.jobs() == back);
 }
 
 HGM_TEST("Colony screen: the icons' places in a row") {

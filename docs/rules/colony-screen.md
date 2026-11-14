@@ -146,6 +146,20 @@ for a farmer, + 3 for a worker and + 5 for a scientist, at x 310 and on 30
 apart, at y 62, 92 and 122. Closer together when more than seven don't fit
 is assumed.
 
+People are moved between jobs by dragging them. Measured: pressing on a
+person picks it up together with all the people to its right in that row.
+They follow the pointer, drawn in the job of the row under it, and the
+population on the screen leaves them out while they are held. The original
+also shows a "Transport Colonists" panel then, for sending them to another
+planet. Letting go over another row puts them in that job, and the rows,
+the population and the side panel are worked out again. Assumed until
+measured: anywhere else they go back. How far apart the held people are
+drawn is assumed too (15 pixels, from 8 right and 10 above the pointer).
+
+**Added in Hegemon:** Up and Down (D-pad up and down) choose a row. Space
+(A) picks up its last person, Up and Down then choose the row it goes to,
+and Space (A) puts it down there.
+
 Measured with these: a scientist's research is rounded to the nearest
 point for the colony (three Elerian scientists under feudalism, 4.5, make
 5 on the screen and on the galaxy map).
@@ -305,7 +319,7 @@ original:
 ## Still to do
 
 Choosing another planet of the system, the ship at the end of the
-production row, moving people between jobs, the people walking, the
+production row, sending people to other planets, the people walking, the
 trees and spires, the star base in the sky, buildings built later,
 building what the build list holds, the ship designs and their
 details in the build list, Auto Build, Repeat
