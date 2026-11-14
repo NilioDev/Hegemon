@@ -10,6 +10,7 @@ add_library(hgm_core STATIC
     src/ui/ruler_name.cpp
     src/ui/name_box.cpp
     src/ui/galaxy_map.cpp
+    src/ui/research_done.cpp
     src/ui/research_select.cpp
     src/ui/colony_screen.cpp
     src/ui/build_list.cpp

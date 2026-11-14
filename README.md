@@ -23,8 +23,12 @@ gamepad, mouse, keyboard and touch controls.
 > treasury and income, command points, food and freighters. The Turn button
 > (or Enter, or Start on a gamepad) ends the turn: the first time it asks
 > which field to research, on the Select New Research screen with your race's
-> scientist, and each turn adds your income and research, with the panel
-> showing about how many turns the project takes. After the first turn your
+> scientist, where the application you point at is the one your scientists
+> learn (Page Up/Page Down or the shoulder buttons choose it too), and each
+> turn adds your income and research, with the panel showing about how many
+> turns the project takes. When a field is finished your scientist shows the
+> new application turning in a beam of light, with its description, before
+> you choose the next field. After the first turn your
 > home colony is shown with its landscape, buildings and roads, the planets
 > of its system, its rows of money, food, production and research, its
 > government and its people at work, and it grows as in the original.

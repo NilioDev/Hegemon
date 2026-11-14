@@ -53,6 +53,12 @@ public:
     std::optional<int> click(int x, int y);
     // Hegemon's gamepad and keyboard: light the next box with a field.
     void moveHighlight(int step);
+    // Hegemon's gamepad and keyboard: point at the next application of the
+    // lit box.
+    void moveApp(int step);
+    // The application chosen with the field: the one pointed at, else the
+    // lit box's first (assumed); 0 with no box lit.
+    int chosenTech() const;
     // The lit box's field, if any (the gamepad's A button).
     std::optional<int> choose() const;
 
@@ -68,6 +74,7 @@ private:
         int field = 0;
         std::string name, cost;
         std::vector<std::string> apps;
+        std::vector<int> techs; // the applications' ids
     };
     int nameY(std::size_t box) const;
 

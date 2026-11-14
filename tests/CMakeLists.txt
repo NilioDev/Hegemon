@@ -17,6 +17,7 @@ add_executable(hgm_tests
     test_galaxy.cpp
     test_empire.cpp
     test_research.cpp
+    test_research_done.cpp
     test_research_select.cpp
     test_colony_screen.cpp
     test_build_list.cpp

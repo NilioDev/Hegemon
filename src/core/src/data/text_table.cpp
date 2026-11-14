@@ -5,17 +5,20 @@
 
 namespace hegemon {
 
-TextTable TextTable::parse(std::span<const std::uint8_t> entry) {
+TextTable TextTable::parse(std::span<const std::uint8_t> entry, std::size_t offset) {
     Reader r(entry);
     const std::size_t count = r.u16();
     const std::size_t size = r.u16();
     if (size == 0 || count > r.remaining() / size) {
         throw FormatError("text records run past the end of the entry");
     }
+    if (offset >= size) {
+        throw FormatError("text records are too short");
+    }
     TextTable table;
     table.records_.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
-        const auto bytes = r.bytes(size);
+        const auto bytes = r.bytes(size).subspan(offset);
         std::string text;
         for (const auto b : bytes) {
             if (b == 0) {

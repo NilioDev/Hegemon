@@ -202,6 +202,7 @@ HGM_TEST("Empire: a turn adds income and research, and a field is learnt by twic
     player.money = 50;
     player.knowledge = tree.averageStart();
     player.research = 13;
+    player.researchTech = 4; // the field's second application
     g.players.push_back(player);
     Random random(1);
     endTurn(g, p, tree, random);
@@ -216,8 +217,13 @@ HGM_TEST("Empire: a turn adds income and research, and a field is learnt by twic
         endTurn(g, p, tree, random);
     }
     HGM_CHECK(g.players[0].research == 0 && g.players[0].researched == 0);
-    HGM_CHECK(g.players[0].knowledge.knowsField(13) && g.players[0].knowledge.knowsTech(3));
-    HGM_CHECK(!g.players[0].knowledge.knowsTech(4)); // one application, until there is a choice
+    // Only the application chosen is learnt, and the screen is told.
+    HGM_CHECK(g.players[0].knowledge.knowsField(13) && g.players[0].knowledge.knowsTech(4));
+    HGM_CHECK(!g.players[0].knowledge.knowsTech(3));
+    HGM_CHECK(g.players[0].learntField == 13 && g.players[0].learntTechs == std::vector<int>{4});
+    HGM_CHECK(g.players[0].researchTech == 0);
+    endTurn(g, p, tree, random);
+    HGM_CHECK(g.players[0].learntField == 0 && g.players[0].learntTechs.empty());
 
     // A new game's empire: +7 BC and three scientists' 9 RP a turn.
     Game h = game(p, race({}), home());
