@@ -45,7 +45,10 @@ gamepad, mouse, keyboard and touch controls.
 > on one of your fleets opens its window with its ships, where you choose
 > which go, and a click on a star sends them there: the map shows the course
 > and the turns to go, the ships travel at their drive's speed each turn as
-> in the original, and the stars they reach are named on the map. Esc on
+> in the original, and the stars they reach are named on the map. Ships
+> reaching a star for the first time show you its system, and a click on a
+> star shows its system: the star, its planets turning on their orbits,
+> gas giants, asteroid belts and wormholes. Esc on
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
@@ -108,6 +111,8 @@ what is missing.
 | Choose which ships of the fleet go | Click their boxes, or All | | |
 | Send the fleet to a star | Click the star | Arrow keys to the star, then Space | D-pad to the star, then A |
 | Close the fleet window | Close | Esc | B |
+| Look at a star system | Click the star | Space on the star | A on the star |
+| Close the star system | Close | Esc, Enter or Space | A or B |
 | Leave the galaxy map (for now) | | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |

@@ -157,7 +157,8 @@ private:
 int researchTurns(int cost, int researched, int perTurn);
 
 // A planet's name: its star's, then "Prime" (`prime`, from HESTRNGS.LBX)
-// for the first orbit or a Roman number for the others.
+// for the star's first planet or a Roman number for the others, counting
+// the planets only (assumed: asteroid belts and gas giants have no names).
 std::string planetName(const Galaxy& galaxy, int planet, const std::string& prime);
 
 // Ends the turn: the stardate moves on a tenth of a year, each colony

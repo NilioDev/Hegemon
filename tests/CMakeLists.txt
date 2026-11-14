@@ -25,6 +25,7 @@ add_executable(hgm_tests
     test_buy.cpp
     test_fleet.cpp
     test_fleet_window.cpp
+    test_system_window.cpp
 )
 target_link_libraries(hgm_tests PRIVATE hegemon::core)
 target_compile_definitions(hgm_tests PRIVATE HEGEMON_GAMEDATA_DIR="${PROJECT_SOURCE_DIR}/gamedata")
