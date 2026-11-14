@@ -33,7 +33,9 @@ The side panel shows what is left over, in whole food.
 A scientist makes `research_scientist_bonus base_scientist`, plus the race's
 science pick and `research_scientist_bonus artifacts_planet` on an ancient
 artifacts world. Feudal and Democracy change this by `govt_bonus
-feudal_science` and `democracy_science` × 5 %.
+feudal_science` and `democracy_science` × 5 %. A colony's research is
+rounded to the nearest point (measured: three Elerian scientists under
+feudalism make 4.5, shown as 5 RP).
 
 ## Money
 
