@@ -163,3 +163,45 @@ HGM_TEST("Colony screen: the planets of the system") {
     }
     HGM_CHECK(red > 50);
 }
+
+HGM_TEST("Colony screen: the buildings and roads of the landscape") {
+    const fs::path folder = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(folder)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(folder);
+    const Races races(data);
+    Galaxy g;
+    g.stars.push_back(Star{});
+    Planet p;
+    p.climate = Climate::Terran;
+    g.planets.push_back(p);
+    g.homes.push_back({0, 0, 0});
+    Game game = startGame(data.parameters(), g, {races.stock(0)}, {0});
+    const Economy economy(data.parameters());
+    const auto draw = [&](int layout) {
+        game.colonies[0].layout = layout;
+        Canvas canvas(640, 480);
+        Palette palette;
+        ColonyScreen(data, game, economy, 0).draw(canvas, palette);
+        return canvas;
+    };
+    const Canvas a = draw(0), b = draw(1);
+    // Measured: in the first layout the capitol stands on place 10, the
+    // marine barracks on place 7; in the second the capitol on place 15.
+    int changed = 0;
+    for (int y = 350; y < 420; ++y) {
+        for (int x = 266; x < 352; ++x) {
+            changed += a.at(x, y) != b.at(x, y) ? 1 : 0;
+        }
+    }
+    HGM_CHECK(changed > 1000);
+    // No shadow colour is left on the screen.
+    int shadow = 0;
+    for (int y = 150; y < 480; ++y) {
+        for (int x = 0; x < 640; ++x) {
+            shadow += a.at(x, y) == 240 || a.at(x, y) == 241 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(shadow == 0);
+}

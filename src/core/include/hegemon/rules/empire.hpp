@@ -30,6 +30,7 @@ struct Colony {
     std::vector<std::string> buildings; // by the names of the fan patch's building table
     int growth = 0; // thousands of people grown towards the next one
     bool idleShown = false; // the human was shown it with nothing to build
+    int layout = 0; // how its landscape is laid out, chosen at random (see ColonyScreen)
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }
     bool has(std::string_view building) const;

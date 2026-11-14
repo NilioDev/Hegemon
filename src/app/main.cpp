@@ -416,6 +416,9 @@ void makeGalaxy(App& app) {
         app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, galaxy, banners);
         app.tree = std::make_unique<hegemon::TechTree>(app.data->parameters());
         app.gameRandom = std::make_unique<hegemon::Random>(app.random());
+        for (hegemon::Colony& c : app.game->colonies) {
+            c.layout = static_cast<int>(app.gameRandom->below(hegemon::ColonyScreen::kLayouts));
+        }
         updatePanel(app);
         app.map->setFleets({galaxy.homes.at(0).star});
         const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
