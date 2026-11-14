@@ -89,7 +89,8 @@ BUFFER0.LBX:
   turn"/"ETA %d turns" (107, 108).
 - Under it the buttons, 195 × 32 from x 24: Close (entry 72, frame 1 under
   the pointer); for a fleet with a colony ship at a star the original shows
-  Colonize Planet (entry 69) under Close.
+  Colonize Planet (entry 69) under Close when the star has a planet to
+  settle; it asks where the ship lands (see [colonizing.md](colonizing.md)).
 
 This draws the measured window to the pixel but two of its frame's.
 
@@ -112,7 +113,9 @@ their ETA and no box chosen, and the Colonize Planet button goes.
 A fleet reaching a star the player has not been to shows the star system
 (see [star-system.md](star-system.md)).
 
-Not done yet: landing a colony ship (the original asks where at once),
-fuel range, other players'
+Ships with a colony ship reaching a star are then asked where it lands
+(see [colonizing.md](colonizing.md)).
+
+Not done yet: fuel range, other players'
 fleets on the map, more than nine ships in a fleet (the original's window
 then has a scroll bar), and the other buttons.

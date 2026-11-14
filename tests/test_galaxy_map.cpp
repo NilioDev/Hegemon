@@ -61,6 +61,10 @@ HGM_TEST("Galaxy map: where the stars are drawn, and the frame around them") {
         black += canvas.at(GalaxyMap::kView.x, y) == 0 ? 1 : 0;
     }
     HGM_CHECK(black > 180); // the rest is the frame
+    // Nothing of the screen before shows through the sky.
+    Canvas other(640, 480, 7);
+    map.draw(other, palette);
+    HGM_CHECK(std::ranges::equal(canvas.pixels(), other.pixels()));
     // The home star's name in red under it: the letters' middle under the
     // star's.
     int left = 640, right = -1;

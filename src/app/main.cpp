@@ -27,6 +27,9 @@
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/fleet_window.hpp"
 #include "hegemon/ui/system_window.hpp"
+#include "hegemon/ui/colonize_box.hpp"
+#include "hegemon/ui/landing_screen.hpp"
+#include "hegemon/ui/name_box.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/message_box.hpp"
 #include "hegemon/ui/race_select.hpp"
@@ -83,6 +86,12 @@ struct App {
     std::unique_ptr<hegemon::FleetWindow> fleetWindow;        // over the map
     std::unique_ptr<hegemon::SystemWindow> systemWindow;      // a star system, over the map
     std::vector<int> arrivals; // stars the human's ships first reached this turn, still to be shown
+    bool inTurn = false;       // showing what the turn brought: the rest follows
+    bool selecting = false;    // the star system window asks where a colony ship lands
+    std::unique_ptr<hegemon::ColonizeBox> colonizeBox;   // over the star system window
+    std::unique_ptr<hegemon::LandingScreen> landing;     // a colony ship lands
+    std::unique_ptr<hegemon::NameBox> starName;          // over the landing
+    std::size_t landedColony = 0;
     std::size_t banner0 = 0;                                  // the human's banner colour
     Uint64 dashTime = 0;                                      // for the courses' moving dashes
     std::mt19937 random{std::random_device{}()};
@@ -372,6 +381,11 @@ void backToMainMenu(App& app) {
     app.fleetWindow.reset();
     app.systemWindow.reset();
     app.arrivals.clear();
+    app.inTurn = false;
+    app.selecting = false;
+    app.colonizeBox.reset();
+    app.landing.reset();
+    app.starName.reset();
     app.buildList.reset();
     app.colony.reset();
     app.message.reset();
@@ -631,6 +645,53 @@ void openResearch(App& app, bool endsTurn) {
 }
 
 void afterTurn(App& app);
+bool showArrival(App& app);
+void leaveColony(App& app);
+
+// What the turn brought, one after another: the stars reached, then the
+// rest.
+void continueTurn(App& app) {
+    if (!showArrival(app)) {
+        app.inTurn = false;
+        afterTurn(app);
+    }
+}
+
+// The human's colony ship at `star`, if any.
+std::optional<std::size_t> colonyShipAt(App& app, int star) {
+    for (std::size_t i = 0; i < app.game->ships.size(); ++i) {
+        const hegemon::Ship& s = app.game->ships[i];
+        if (s.player == 0 && s.kind == hegemon::ShipKind::ColonyShip && s.star == star && s.destination < 0) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+// The star system window asks where the colony ship at `star` lands.
+// Returns whether it opened.
+bool openSelect(App& app, int star) {
+    if (!colonyShipAt(app, star) || hegemon::colonySites(*app.game, star).empty()) {
+        return false;
+    }
+    try {
+        const auto messages = hegemon::parseStringList(app.data->archive("ESTRINGS.LBX").entry(0));
+        constexpr std::size_t kSelectPlanet = 462; // "Select planet for Colony Ship in %s system"
+        if (messages.size() <= kSelectPlanet) {
+            throw hegemon::FormatError("too few messages in ESTRINGS.LBX");
+        }
+        const auto& name = app.game->galaxy.stars.at(static_cast<std::size_t>(star)).name;
+        app.systemWindow = std::make_unique<hegemon::SystemWindow>(
+            *app.data, *app.game, star, hegemon::SystemWindow::Place::Middle, app.banner0,
+            hegemon::formatMessage(messages[kSelectPlanet], {name}));
+        app.systemWindow->hover(app.pointer->x(), app.pointer->y());
+        app.selecting = true;
+        return true;
+    } catch (const std::exception& e) {
+        SDL_Log("The star system could not be shown: %s", e.what());
+    }
+    return false;
+}
 
 // Shows the next star the human's ships reached this turn, if any.
 bool showArrival(App& app) {
@@ -667,19 +728,241 @@ void openSystem(App& app, int star) {
     }
 }
 
-// Closes the star system window; after the turn the next arrival follows,
-// then the rest of what the turn brings.
+// Closes the star system window. Measured: when the ships that arrived
+// have a colony ship and there is a planet to settle, the original asks
+// where it lands. After the turn the next arrival follows, then the rest
+// of what the turn brings.
 void closeSystem(App& app) {
-    const bool arrival = app.systemWindow && app.systemWindow->place() == hegemon::SystemWindow::Place::Middle;
+    const bool arrival = app.systemWindow && !app.selecting &&
+                         app.systemWindow->place() == hegemon::SystemWindow::Place::Middle;
+    const int star = app.systemWindow ? app.systemWindow->star() : -1;
     app.systemWindow.reset();
-    if (arrival && !showArrival(app)) {
-        afterTurn(app);
+    app.selecting = false;
+    if (arrival && openSelect(app, star)) {
+        return;
+    }
+    if (app.inTurn) {
+        continueTurn(app);
+    }
+}
+
+void showNewColony(App& app);
+
+// The colony ship lands on the planet asked about: the new colony, then
+// the landing.
+void land(App& app) {
+    const int planet = app.colonizeBox->planet();
+    app.colonizeBox.reset();
+    const int star = app.game->galaxy.planets.at(static_cast<std::size_t>(planet)).star;
+    const auto ship = colonyShipAt(app, star);
+    if (!ship) {
+        return;
+    }
+    app.systemWindow.reset();
+    app.selecting = false;
+    // The ships are numbered anew.
+    app.fleetWindow.reset();
+    app.landedColony = hegemon::foundColony(*app.game, *ship, planet);
+    hegemon::Colony& c = app.game->colonies[app.landedColony];
+    c.layout = static_cast<int>(app.gameRandom->below(hegemon::ColonyScreen::kLayouts));
+    c.idleShown = true;
+    updatePanel(app);
+    updateFleets(app);
+    try {
+        app.landing = std::make_unique<hegemon::LandingScreen>(*app.data, *app.game, app.landedColony);
+    } catch (const std::exception& e) {
+        SDL_Log("The landing could not be shown: %s", e.what());
+        showNewColony(app);
+    }
+}
+
+// After the landing: the new colony's screen with what the original says.
+void showNewColony(App& app) {
+    app.landing.reset();
+    app.starName.reset();
+    SDL_StopTextInput(app.window);
+    try {
+        app.colony = std::make_unique<hegemon::ColonyScreen>(*app.data, *app.game,
+                                                             hegemon::Economy(app.data->parameters()), app.landedColony);
+        app.colonyIndex = app.landedColony;
+        app.pointer->useEntry(hegemon::ColonyScreen::kPointerEntry);
+        const auto messages = hegemon::parseStringList(app.data->archive("ESTRINGS.LBX").entry(0));
+        const auto strings = hegemon::parseStringList(app.data->archive("HESTRNGS.LBX").entry(0));
+        constexpr std::size_t kJustColonized = 64, kPrime = 160;
+        if (messages.size() > kJustColonized && strings.size() > kPrime) {
+            const int planet = app.game->colonies.at(app.landedColony).planet;
+            app.purchase = {};
+            app.message = std::make_unique<hegemon::MessageBox>(
+                *app.data, hegemon::MessageBox::Kind::Message,
+                hegemon::formatMessage(messages[kJustColonized],
+                                       {hegemon::planetName(app.game->galaxy, planet, strings[kPrime])}));
+        }
+    } catch (const std::exception& e) {
+        SDL_Log("The new colony could not be shown: %s", e.what());
+        leaveColony(app);
+    }
+}
+
+// The landing: a click (Enter, Space, A) lands the ship at once, then
+// goes on. Measured: the original then asks for the star's name (assumed:
+// when it is the human's first colony there).
+void afterLanding(App& app) {
+    if (!app.landing->landed()) {
+        app.landing->skip();
+        return;
+    }
+    const int planet = app.game->colonies.at(app.landedColony).planet;
+    const int star = app.game->galaxy.planets.at(static_cast<std::size_t>(planet)).star;
+    int here = 0;
+    for (const hegemon::Colony& c : app.game->colonies) {
+        if (c.player == 0 && app.game->galaxy.planets.at(static_cast<std::size_t>(c.planet)).star == star) {
+            ++here;
+        }
+    }
+    if (here > 1) {
+        showNewColony(app);
+        return;
+    }
+    try {
+        constexpr int kStarNameX = 177, kStarNameY = 130;
+        app.starName = std::make_unique<hegemon::NameBox>(hegemon::starNameBox(
+            *app.data, app.game->galaxy.stars.at(static_cast<std::size_t>(star)).name, kStarNameX, kStarNameY));
+        hegemon::Palette own;
+        app.starName->picture().applyPalette(own);
+        app.starName->useColours(hegemon::nearestColours(own, app.landing->palette()));
+        SDL_StartTextInput(app.window);
+    } catch (const std::exception& e) {
+        SDL_Log("The star name box could not be read: %s", e.what());
+        showNewColony(app);
+    }
+}
+
+void acceptStarName(App& app) {
+    const int planet = app.game->colonies.at(app.landedColony).planet;
+    auto& star = app.game->galaxy.stars.at(
+        static_cast<std::size_t>(app.game->galaxy.planets.at(static_cast<std::size_t>(planet)).star));
+    if (!app.starName->name().empty()) {
+        star.name = app.starName->name();
+    }
+    showNewColony(app);
+}
+
+SDL_AppResult landingEvent(App& app, SDL_Event* event) {
+    if (app.starName) {
+        auto& box = *app.starName;
+        switch (event->type) {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            }
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event->button.button == SDL_BUTTON_LEFT &&
+                box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                acceptStarName(app);
+            }
+            break;
+        case SDL_EVENT_TEXT_INPUT:
+            for (const char* c = event->text.text; *c != '\0'; ++c) {
+                if (static_cast<unsigned char>(*c) < 0x80) {
+                    box.type(*c);
+                }
+            }
+            break;
+        case SDL_EVENT_KEY_DOWN:
+            if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+                acceptStarName(app);
+            } else if (event->key.key == SDLK_BACKSPACE) {
+                box.backspace();
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+                acceptStarName(app);
+            }
+            break;
+        default:
+            break;
+        }
+        return SDL_APP_CONTINUE;
+    }
+    const bool next =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) ||
+        (event->type == SDL_EVENT_KEY_DOWN &&
+         (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER || event->key.key == SDLK_SPACE ||
+          event->key.key == SDLK_ESCAPE)) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+         (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH || event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST));
+    if (next) {
+        afterLanding(app);
+    }
+    return SDL_APP_CONTINUE;
+}
+
+// The question before a colony ship lands: Yes lands it, No goes back to
+// the star system.
+bool colonizeEvent(App& app, SDL_Event* event) {
+    if (!app.colonizeBox) {
+        return false;
+    }
+    auto& box = *app.colonizeBox;
+    using Answer = hegemon::ColonizeBox::Answer;
+    Answer a = Answer::None;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            a = box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER || event->key.key == SDLK_Y) {
+            a = Answer::Yes;
+        } else if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_N) {
+            a = Answer::No;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            a = Answer::Yes;
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            a = Answer::No;
+        }
+        break;
+    default:
+        break;
+    }
+    if (a == Answer::Yes) {
+        land(app);
+    } else if (a == Answer::No) {
+        app.colonizeBox.reset();
+    }
+    return true;
+}
+
+// Asks before the colony ship lands on `planet`.
+void askColonize(App& app, int planet) {
+    const auto sites = hegemon::colonySites(*app.game, app.systemWindow->star());
+    if (std::find(sites.begin(), sites.end(), planet) == sites.end()) {
+        return;
+    }
+    try {
+        app.colonizeBox = std::make_unique<hegemon::ColonizeBox>(*app.data, *app.game, 0, planet);
+    } catch (const std::exception& e) {
+        SDL_Log("The question could not be read: %s", e.what());
     }
 }
 
 // The star system window takes every event while it is open: Close, Esc
 // or B closes it.
 bool systemEvent(App& app, SDL_Event* event) {
+    if (colonizeEvent(app, event)) {
+        return true;
+    }
     if (!app.systemWindow) {
         return false;
     }
@@ -693,21 +976,35 @@ bool systemEvent(App& app, SDL_Event* event) {
             w.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
         }
         break;
-    case SDL_EVENT_MOUSE_BUTTON_UP:
-        if (event->button.button == SDL_BUTTON_LEFT &&
-            w.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)) ==
-                hegemon::SystemWindow::Action::Close) {
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+        if (event->button.button != SDL_BUTTON_LEFT) {
+            break;
+        }
+        const int x = static_cast<int>(event->button.x), y = static_cast<int>(event->button.y);
+        if (w.release(x, y) == hegemon::SystemWindow::Action::Close) {
             closeSystem(app);
+        } else if (app.selecting) {
+            if (const auto planet = w.planetAt(x, y)) {
+                askColonize(app, *planet);
+            }
         }
         break;
+    }
     case SDL_EVENT_KEY_DOWN:
-        if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER ||
-            event->key.key == SDLK_SPACE) {
+        if (app.selecting && (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER ||
+                              event->key.key == SDLK_SPACE)) {
+            // Hegemon's keyboard: the first planet to settle.
+            askColonize(app, hegemon::colonySites(*app.game, w.star()).front());
+        } else if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+                   event->key.key == SDLK_KP_ENTER || event->key.key == SDLK_SPACE) {
             closeSystem(app);
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST || event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+        if (app.selecting && event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            askColonize(app, hegemon::colonySites(*app.game, w.star()).front());
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST ||
+                   event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
             closeSystem(app);
         }
         break;
@@ -749,9 +1046,8 @@ void endTurn(App& app) {
             app.arrivals.push_back(static_cast<int>(i));
         }
     }
-    if (!showArrival(app)) {
-        afterTurn(app);
-    }
+    app.inTurn = true;
+    continueTurn(app);
 }
 
 // After the turn: a screen for each application learnt, then Select New
@@ -797,6 +1093,9 @@ void afterTurn(App& app) {
 void leaveColony(App& app) {
     app.colony.reset();
     app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+    if (app.inTurn) {
+        continueTurn(app);
+    }
 }
 
 void openBuildList(App& app) {
@@ -1219,8 +1518,13 @@ bool fleetEvent(App& app, SDL_Event* event) {
         }
         const int x = static_cast<int>(event->button.x), y = static_cast<int>(event->button.y);
         if (app.fleetWindow && app.fleetWindow->area().contains(x, y)) {
-            if (app.fleetWindow->release(x, y) == hegemon::FleetWindow::Action::Close) {
+            const auto action = app.fleetWindow->release(x, y);
+            if (action == hegemon::FleetWindow::Action::Close) {
                 app.fleetWindow.reset();
+            } else if (action == hegemon::FleetWindow::Action::Colonize) {
+                const int star = app.game->ships.at(app.fleetWindow->ships().front()).star;
+                app.fleetWindow.reset();
+                openSelect(app, star);
             }
             return true;
         }
@@ -1329,6 +1633,9 @@ bool fleetEvent(App& app, SDL_Event* event) {
 // The galaxy map: the home star's name first, then the Turn button (also
 // Enter, or the gamepad's Start); Esc or B goes back to the main menu.
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
+    if (app.landing) {
+        return landingEvent(app, event);
+    }
     if (app.researchDone) {
         return researchDoneEvent(app, event);
     }
@@ -1708,7 +2015,14 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->buildList) {
+        if (app->landing) {
+            app->landing->tick(elapsed);
+            app->landing->draw(app->canvas, app->palette);
+            if (app->starName) {
+                app->starName->tick(elapsed);
+                app->starName->draw(app->canvas);
+            }
+        } else if (app->buildList) {
             app->buildList->draw(app->canvas, app->palette);
         } else if (app->colony) {
             app->colony->tick(elapsed);
@@ -1733,6 +2047,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             if (app->systemWindow) {
                 app->systemWindow->tick(elapsed);
                 app->systemWindow->draw(app->canvas, app->palette);
+            }
+            if (app->colonizeBox) {
+                app->colonizeBox->draw(app->canvas, app->palette);
             }
             if (app->homeName) {
                 app->homeName->tick(elapsed);

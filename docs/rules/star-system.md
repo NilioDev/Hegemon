@@ -17,6 +17,8 @@ the stars and planets read from the Lua interface.
   in the middle of the map, titled "Scouts arrive at the %s system"
   (ESTRINGS.LBX message 456). Hegemon shows these before the turn's other
   screens (the order is assumed).
+- When ships with a colony ship arrive, Close then opens it once more,
+  asking where the ship lands (see [colonizing.md](colonizing.md)).
 
 Close (or Esc) closes it. Hegemon also takes Enter or Space, and on a
 gamepad A or B.

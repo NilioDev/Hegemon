@@ -103,7 +103,7 @@ std::string formatNumber(const std::string& message, int n) {
 // The Enter Home Star Name box: its corner, its title (HESTRNGS.LBX) and
 // its texts' colours.
 constexpr int kNameBoxX = 131, kNameBoxY = 146;
-constexpr std::size_t kNameBoxTitle = 257;
+constexpr std::size_t kNameBoxTitle = 257, kStarNameBoxTitle = 256; // "Enter Home Star Name", "Enter Star Name"
 constexpr NameBox::Shades kNameBoxShades = {{12, 24, 19}, {12, 24}};
 
 } // namespace
@@ -114,6 +114,14 @@ NameBox homeStarNameBox(GameData& data, std::string name) {
         throw FormatError("too few messages in HESTRNGS.LBX");
     }
     return NameBox(data, strings[kNameBoxTitle], std::move(name), kNameBoxX, kNameBoxY, kNameBoxShades);
+}
+
+NameBox starNameBox(GameData& data, std::string name, int x, int y) {
+    const auto strings = parseStringList(data.archive("HESTRNGS.LBX").entry(0));
+    if (strings.size() <= kStarNameBoxTitle) {
+        throw FormatError("too few messages in HESTRNGS.LBX");
+    }
+    return NameBox(data, strings[kStarNameBoxTitle], std::move(name), x, y, kNameBoxShades);
 }
 
 GalaxyMap::GalaxyMap(GameData& data, const Galaxy& galaxy, std::vector<std::size_t> banners)
@@ -177,6 +185,13 @@ int GalaxyMap::screenY(int y) const { return kMapY + y * kMapH / galaxy_.height;
 
 void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
     palette = palette_;
+    // The sky's black is see-through: the screen before shows through it
+    // unless it is cleared.
+    for (int y = 0; y < canvas.height(); ++y) {
+        for (int x = 0; x < canvas.width(); ++x) {
+            canvas.set(x, y, 0);
+        }
+    }
     sky_.draw(0, canvas);
     for (const Nebula& n : galaxy_.nebulae) {
         if (n.picture >= 0 && static_cast<std::size_t>(n.picture) < nebulae_.size()) {
