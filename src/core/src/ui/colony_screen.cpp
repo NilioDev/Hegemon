@@ -4,6 +4,8 @@
 #include "hegemon/data/reader.hpp"
 #include "hegemon/data/text_table.hpp"
 #include "hegemon/game_data.hpp"
+#include "hegemon/rules/production.hpp"
+#include "hegemon/ui/build_list.hpp"
 
 #include <algorithm>
 
@@ -19,6 +21,13 @@ constexpr const char* kFrameArchive = "COLPUPS.LBX";
 constexpr std::size_t kFrameEntry = 5;
 // HESTRNGS.LBX: the word for a star's first planet.
 constexpr std::size_t kPrimeText = 160;
+constexpr std::size_t kTurnsText = 226; // "%d turns", also for one
+// The box of what is built, measured: its name in font 1 centred on 578 at
+// y 38, the turns from (531, 103) and the progress, "made / cost", ending
+// at 626, in font 0; one pixel between letters, shades 245 and 253 and a
+// black shadow.
+constexpr int kProductCentre = 578, kProductY = 38, kTurnsX = 531, kBoxTextY = 103, kProgressRight = 626;
+constexpr std::size_t kProductFont = 1, kBoxFont = 0;
 // ESTRINGS.LBX messages.
 constexpr std::size_t kTitleMessage = 97;      // "%sColony of %s"
 constexpr std::size_t kPopulationMessage = 424; // "Pop %d,%03d k (%+dk)"
@@ -265,9 +274,28 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
     title_ = formatMessage(messages[kTitleMessage],
                            {std::string(), planetName(game.galaxy, c.planet, strings[kPrimeText])});
     planetList(data, game, economy, c, messages);
+    if (strings.size() <= kTurnsText) {
+        throw FormatError("too few messages in HESTRNGS.LBX");
+    }
+    {
+        // Measured: with nothing to build "1 turns" and "0 / 0".
+        int cost = 0, turns = 1;
+        if (!c.buildList.empty()) {
+            const std::string& what = c.buildList.front();
+            product_ = productName(data, what);
+            cost = productCost(data.parameters(), what);
+            const ColonyOutput made = economy.output(game, c);
+            const int perTurn = std::max(0, made.production - made.upkeep);
+            const int left = std::max(0, cost - c.produced);
+            // Assumed: with nothing made a turn, as if one were made.
+            turns = std::max(1, (left + std::max(1, perTurn) - 1) / std::max(1, perTurn));
+        }
+        turns_ = formatMessage(strings[kTurnsText], {static_cast<long long>(turns)});
+        progress_ = std::to_string(cost == 0 ? 0 : c.produced) + " / " + std::to_string(cost);
+    }
     population_ = formatMessage(messages[kPopulationMessage],
                                 {static_cast<long long>(c.population()), static_cast<long long>(c.growth),
-                                 static_cast<long long>(economy.growth(player, planet, c.population()))});
+                                 static_cast<long long>(economy.growth(game, c))});
 
     // The sky shows where the landscape leaves it; the buildings don't
     // change while the screen is open, so the scene is drawn once.
@@ -452,6 +480,19 @@ void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
     style.spacing = kSpacing;
     const Font& titleFont = fonts_.font(kTitleFont);
     titleFont.draw(canvas, kTitleCentre - titleFont.textWidth(title_, kSpacing) / 2, kTitleY, title_, style);
+    {
+        TextStyle box;
+        box.shades[1] = kShade1;
+        box.shades[2] = kShade2;
+        box.shades[3] = kShade3;
+        box.shadow = std::uint8_t{0};
+        box.spacing = kListSpacing;
+        const Font& nameFont = fonts_.font(kProductFont);
+        nameFont.draw(canvas, kProductCentre - nameFont.textWidth(product_, kListSpacing) / 2, kProductY, product_, box);
+        const Font& boxFont = fonts_.font(kBoxFont);
+        boxFont.draw(canvas, kTurnsX, kBoxTextY, turns_, box);
+        boxFont.draw(canvas, kProgressRight - boxFont.textWidth(progress_, kListSpacing), kBoxTextY, progress_, box);
+    }
     const Font& popFont = fonts_.font(kPopulationFont);
     popFont.draw(canvas, kPopulationRight - popFont.textWidth(population_, kSpacing), kPopulationY, population_, style);
 }

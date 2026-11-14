@@ -36,6 +36,11 @@ public:
 
     const std::string& title() const { return title_; }
     const std::string& population() const { return population_; }
+    // The box of what the colony builds: its name (empty with nothing to
+    // build), the turns it takes and how far it is.
+    const std::string& productText() const { return product_; }
+    const std::string& turnsText() const { return turns_; }
+    const std::string& progressText() const { return progress_; }
 
     // The ways a home colony's landscape is laid out, as measured: which
     // building or decoration stands on which of the 36 places, and the roads.
@@ -106,6 +111,7 @@ private:
     FontSet fonts_;
     std::string title_;
     std::string population_;
+    std::string product_, turns_, progress_;
     Rect held_{};
 };
 
