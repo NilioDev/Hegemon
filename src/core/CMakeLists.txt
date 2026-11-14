@@ -13,6 +13,7 @@ add_library(hgm_core STATIC
     src/ui/research_select.cpp
     src/ui/colony_screen.cpp
     src/ui/build_list.cpp
+    src/ui/message_box.cpp
     src/ui/banner_select.cpp
     src/rules/races.cpp
     src/data/lbx.cpp

@@ -24,6 +24,7 @@
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
+#include "hegemon/ui/message_box.hpp"
 #include "hegemon/ui/race_select.hpp"
 #include "hegemon/ui/research_select.hpp"
 #include "hegemon/ui/ruler_name.hpp"
@@ -69,6 +70,8 @@ struct App {
     std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map
     std::size_t colonyIndex = 0;                              // the colony it shows
     std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
+    std::unique_ptr<hegemon::MessageBox> message;             // what Buy says, over the colony screen
+    hegemon::Purchase purchase;                               // what it offers
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -355,6 +358,7 @@ void backToMainMenu(App& app) {
     app.homeName.reset();
     app.buildList.reset();
     app.colony.reset();
+    app.message.reset();
     app.research.reset();
     app.map.reset();
     app.game.reset();
@@ -503,19 +507,106 @@ void openBuildList(App& app) {
     }
 }
 
+// The colony screen shows what the colony builds now.
+void refreshColony(App& app) {
+    try {
+        app.colony = std::make_unique<hegemon::ColonyScreen>(
+            *app.data, *app.game, hegemon::Economy(app.data->parameters()), app.colonyIndex);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The colony screen could not be read: %s", e.what());
+    }
+}
+
 // Leaves the build list; OK keeps what it lists.
 void closeBuildList(App& app, bool keep) {
     if (keep) {
         app.game->colonies.at(app.colonyIndex).buildList = app.buildList->buildList();
-        // The colony screen shows what it builds now.
-        try {
-            app.colony = std::make_unique<hegemon::ColonyScreen>(
-                *app.data, *app.game, hegemon::Economy(app.data->parameters()), app.colonyIndex);
-        } catch (const hegemon::FormatError& e) {
-            SDL_Log("The colony screen could not be read: %s", e.what());
-        }
+        refreshColony(app);
     }
     app.buildList.reset();
+}
+
+// Buy: asks whether to spend the price, or says why it can't; a second Buy
+// in the same turn takes the purchase back.
+void startBuy(App& app) {
+    hegemon::Colony& c = app.game->colonies.at(app.colonyIndex);
+    hegemon::Player& player = app.game->players.at(static_cast<std::size_t>(c.player));
+    const hegemon::ColonyOutput out = hegemon::Economy(app.data->parameters()).output(*app.game, c);
+    app.purchase =
+        hegemon::purchase(app.data->parameters(), c, player.money, std::max(0, out.production - out.upkeep));
+    using Kind = hegemon::Purchase::Kind;
+    if (app.purchase.kind == Kind::Undo) {
+        hegemon::buy(c, player.money, app.purchase);
+        refreshColony(app);
+        return;
+    }
+    try {
+        app.message = std::make_unique<hegemon::MessageBox>(
+            *app.data, app.purchase.kind == Kind::Offer ? hegemon::MessageBox::Kind::Question
+                                                        : hegemon::MessageBox::Kind::Message,
+            app.colony->buyText(app.purchase));
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The message could not be read: %s", e.what());
+    }
+}
+
+// Closes what Buy says; Yes buys.
+void answerBuy(App& app, bool yes) {
+    if (yes && app.purchase.kind == hegemon::Purchase::Kind::Offer) {
+        hegemon::Colony& c = app.game->colonies.at(app.colonyIndex);
+        hegemon::buy(c, app.game->players.at(static_cast<std::size_t>(c.player)).money, app.purchase);
+        app.message.reset();
+        refreshColony(app);
+        return;
+    }
+    app.message.reset();
+}
+
+// What Buy says: a button let go over answers. Enter, Y or the gamepad's A
+// say Yes (or Close); Esc, N or B say No (or Close).
+SDL_AppResult messageEvent(App& app, SDL_Event* event) {
+    hegemon::MessageBox& box = *app.message;
+    using Answer = hegemon::MessageBox::Answer;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            const Answer a = box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            if (a != Answer::None) {
+                answerBuy(app, a == Answer::Yes);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_Y:
+            answerBuy(app, true);
+            break;
+        case SDLK_ESCAPE:
+        case SDLK_N:
+            answerBuy(app, false);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            answerBuy(app, true);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            answerBuy(app, false);
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 // The build list: a product clicked goes to the end of the list, a line of
@@ -601,10 +692,13 @@ SDL_AppResult buildListEvent(App& app, SDL_Event* event) {
 
 // The colony screen: Return (also Esc, Enter, or the gamepad's A or B)
 // goes back to the map; Change (also C, or the gamepad's X) opens the
-// build list.
+// build list; Buy (also B, or the gamepad's Y) buys what is built.
 SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
     if (app.buildList) {
         return buildListEvent(app, event);
+    }
+    if (app.message) {
+        return messageEvent(app, event);
     }
     switch (event->type) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -621,6 +715,9 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
             case hegemon::ColonyScreen::Action::Change:
                 openBuildList(app);
                 break;
+            case hegemon::ColonyScreen::Action::Buy:
+                startBuy(app);
+                break;
             case hegemon::ColonyScreen::Action::None:
                 break;
             }
@@ -631,6 +728,8 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
             leaveColony(app);
         } else if (event->key.key == SDLK_C) {
             openBuildList(app);
+        } else if (event->key.key == SDLK_B) {
+            startBuy(app);
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
@@ -638,6 +737,8 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
             leaveColony(app);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_WEST) {
             openBuildList(app);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) {
+            startBuy(app);
         }
         break;
     default:
@@ -1099,6 +1200,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         } else if (app->colony) {
             app->colony->tick(elapsed);
             app->colony->draw(app->canvas, app->palette);
+            if (app->message) {
+                app->message->draw(app->canvas, app->palette);
+            }
         } else if (app->research) {
             app->research->tick(elapsed);
             app->research->draw(app->canvas, app->palette);

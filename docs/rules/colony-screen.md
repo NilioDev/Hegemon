@@ -166,9 +166,56 @@ which is drawn lighter while something is built.
 
 ## Buttons
 
-Return covers (552, 457) to (628, 478) and Change (520, 124) to (579,
-143); Change opens the build list. Leaders and Buy are in the frame too and
-do nothing yet.
+Return covers (552, 457) to (628, 478), Change (520, 124) to (579, 143)
+and Buy (590, 124) to (626, 143); Change opens the build list. Leaders is in
+the frame too and does nothing yet.
+
+## Buy
+
+Buy finishes the first of the build list now, for BC. Measured on the
+original (fan patch 1.51), with the messages of ESTRINGS:
+
+- With nothing in the list: "You have no product selected to buy." (587).
+- With housing or trade goods first: "You cannot buy Housing or Trade
+  Goods, as they are settings, not specific items." (568).
+- When what is left is no more than the colony makes a turn (assumed from
+  the message): "You cannot spend BC's to get this faster than in a single
+  turn." (578).
+- When the price is more than the treasury: "You cannot afford this
+  increase in production. You are short by %d BC." (564), the price less
+  the money.
+- Otherwise the question "Do you want to spend %d BC to buy %d
+  production?" (269) with the price and what is left; Yes pays and fills the
+  product up, so the box reads "1 turns" and "cost / cost", No changes
+  nothing.
+- The price: each point still to make costs 10 BC in the product's first
+  tenth, 5 up to its half and 2 after, so 4 BC a point with nothing made.
+  Measured on a spy (100) as it was built, 6 a turn: 400, 340, 290, 260,
+  230, 200, 170, 140, 110 and 92 BC.
+- The fan patch's manual: a second Buy in the same turn gives the BC back
+  and takes the production away again. What was bought is forgotten when
+  the turn ends.
+
+The messages are boxes over the screen; they keep the screen's colours and
+are drawn in those nearest to the colours of their own palette (the least
+sum of squared 6-bit differences), the text too.
+
+- A message: TEXTBOX.LBX. Its inside is lines of the box's colours 2, 3 and
+  4 in turn, from x 140 to 499, starting 11 rows below the box's top
+  (earlier rows of the pattern show where the frame leaves room) and ending
+  9 rows into the bottom picture. Over them the top (entry 0, 42 rows), the
+  sides from the body (1) for as many rows as the text needs, 15 a line
+  less one, and the bottom (2, 43 rows), at x 130, the whole box centred
+  on the screen's height. The text in font 3, two pixels between letters,
+  from x 159, 33 rows below the top and 15 a line, shades 166 and 168,
+  broken at spaces to fit 322 pixels. Close (3, pressed in its second
+  frame) 16 rows into the bottom at x 288.
+- A question: CONFIRM.LBX, the box (0) at (161, 117), Yes (1) at (235, 302)
+  and No (2) at (345, 302), each pressed in its second frame. The text in
+  font 4, two pixels between letters, each line centred on 317, 17 pixels
+  a line with the block's middle at 216, shades 230, 232 and 231, broken to
+  fit 230 pixels. Esc does not close it in the original; in Hegemon Esc
+  and N answer No and Enter and Y answer Yes.
 
 ## The build list
 
@@ -220,7 +267,7 @@ original:
 Choosing another planet of the system, the ship at the end of the
 production row, moving people between jobs, the people walking, the
 trees and spires, the star base in the sky, buildings built later,
-building what the build list holds, Buy, the build list's picture and
+building what the build list holds, the build list's picture and
 description in the box at the top, the ship designs, Auto Build, Repeat
 Build, Refit and Design, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the

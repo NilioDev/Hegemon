@@ -391,6 +391,8 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     // index: a colony base adds a colony.
     for (std::size_t i = 0, n = game.colonies.size(); i < n; ++i) {
         produce(game, parameters, economy, game.colonies[i]);
+        game.colonies[i].boughtProduction = 0;
+        game.colonies[i].boughtPrice = 0;
     }
     for (std::size_t i = 0; i < grown.size(); ++i) {
         Colony& c = game.colonies[i];

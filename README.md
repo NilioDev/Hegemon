@@ -33,7 +33,9 @@ gamepad, mouse, keyboard and touch controls.
 > costs and how many turns it takes. Each turn the colony builds the first of
 > the list: buildings, colony, outpost and transport ships, freighters, spies
 > and colony bases, while trade goods earn money and housing speeds up growth,
-> and the colony screen shows what is being built and how far it is. Esc on
+> and the colony screen shows what is being built and how far it is. Buy
+> finishes it at once for BC, at the original's price, and a second Buy in
+> the same turn takes the purchase back, as the fan patch allows. Esc on
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
@@ -84,6 +86,9 @@ what is missing.
 | Name your home star | Accept | Type, Backspace, Enter | A takes the offered name |
 | Leave the colony screen | Return | Esc or Enter | A or B |
 | Open the colony's build list | Change | C | X |
+| Buy what the colony builds | Buy | B | Y |
+| Answer a question | Yes or No | Enter or Y, Esc or N | A or B |
+| Close a message | Close | Enter or Esc | A or B |
 | Add to the build list, or delete a line of it | Click it | Arrow keys, then Space | D-pad, then A |
 | Leave the build list | OK keeps it, Cancel doesn't | Enter keeps it, Esc doesn't | Start keeps it, B doesn't |
 | Leave the galaxy map (for now) | | Esc | B |

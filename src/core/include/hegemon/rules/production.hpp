@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,5 +54,32 @@ bool repeatable(std::string_view product);
 // Adds a product at the end of the colony's build list when there is room
 // and it may go there; returns whether it did.
 bool addToBuildList(Colony& colony, std::string_view product);
+
+// Buy: what finishing the first of the build list now costs in BC, with
+// `produced` of its `cost` made: 10 BC a point in its first tenth, 5 up to
+// its half, 2 after.
+int buyPrice(int cost, int produced);
+
+// What Buy does for a colony of a player with `money` BC, when it makes
+// `perTurn` production a turn.
+struct Purchase {
+    enum class Kind : std::uint8_t {
+        Offer,           // asks whether to spend `price` on `amount`
+        Undo,            // takes back this turn's purchase
+        NothingSelected, // nothing in the build list
+        NotBuyable,      // housing or trade goods
+        ThisTurn,        // done this turn anyway
+        Short,           // `price` is more than the money
+    };
+    Kind kind = Kind::NothingSelected;
+    int price = 0;
+    int amount = 0;
+    int shortBy = 0; // for Short: the price less the money
+};
+Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn);
+
+// Carries out an Offer (pays and fills up the product) or an Undo (gives
+// back the BC and takes away the production); does nothing otherwise.
+void buy(Colony& colony, int& money, const Purchase& purchase);
 
 } // namespace hegemon
