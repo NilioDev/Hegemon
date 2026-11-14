@@ -24,6 +24,8 @@ HGM_TEST("Buy: the price measured on the original") {
     for (const auto& [made, price] : measured) {
         HGM_CHECK(buyPrice(100, made) == price);
     }
+    // And for a colony ship (500).
+    HGM_CHECK(buyPrice(500, 0) == 2000 && buyPrice(500, 6) == 1940 && buyPrice(500, 12) == 1880);
     HGM_CHECK(buyPrice(100, 100) == 0 && buyPrice(100, 120) == 0);
 }
 

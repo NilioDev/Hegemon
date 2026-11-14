@@ -191,7 +191,8 @@ original (fan patch 1.51), with the messages of ESTRINGS:
 - The price: each point still to make costs 10 BC in the product's first
   tenth, 5 up to its half and 2 after, so 4 BC a point with nothing made.
   Measured on a spy (100) as it was built, 6 a turn: 400, 340, 290, 260,
-  230, 200, 170, 140, 110 and 92 BC.
+  230, 200, 170, 140, 110 and 92 BC; on a colony ship (500) 2000, 1940 and
+  1880 BC.
 - The fan patch's manual: a second Buy in the same turn gives the BC back
   and takes the production away again. What was bought is forgotten when
   the turn ends.
