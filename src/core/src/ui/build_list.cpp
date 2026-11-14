@@ -88,7 +88,7 @@ TextStyle style(const std::array<std::uint8_t, 3>& colours) {
     s.shades[1] = colours[2];
     s.shades[2] = colours[0];
     s.shades[3] = colours[1];
-    s.shadow = 0;
+    s.shadow = std::uint8_t{0};
     s.shadowAt = {{1, 0}, {0, 1}, {1, 1}};
     s.spacing = kSpacing;
     return s;
