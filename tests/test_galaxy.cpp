@@ -124,6 +124,9 @@ HGM_TEST("Galaxy: stars apart, homes apart, planets from the tables") {
         HGM_CHECK(g.width == 759 && g.height == 600);
         HGM_CHECK(g.stars.size() == 24);
         HGM_CHECK(g.stars[0].special == Special::Orion);
+        for (const Planet& planet : g.planets) {
+            HGM_CHECK(planet.image >= 0 && planet.image < kPlanetImages);
+        }
         std::set<std::string> names;
         for (std::size_t i = 0; i < g.stars.size(); ++i) {
             const Star& a = g.stars[i];

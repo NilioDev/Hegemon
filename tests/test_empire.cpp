@@ -27,8 +27,9 @@ const std::string kList = R"({"patch_version": "test", "parameters": [
   "columns": [{"name": "ultra_poor"}, {"name": "poor"}, {"name": "abundant"}, {"name": "rich"}, {"name": "ultra_rich"}]},
  {"name": "research_scientist_bonus", "type": "table", "rows": [], "default": [3, 2],
   "columns": [{"name": "base_scientist"}, {"name": "artifacts_planet"}]},
- {"name": "race_pick", "type": "table", "rows": [], "default": [-1, 2, 4, -1, 1, 2, -1, 1, 2, -1, 1, 2],
-  "columns": [{"name": "farming1_value"}, {"name": "farming2_value"}, {"name": "farming3_value"},
+ {"name": "race_pick", "type": "table", "rows": [], "default": [-50, 50, 100, -1, 2, 4, -1, 1, 2, -1, 1, 2, -1, 1, 2],
+  "columns": [{"name": "growth1_value"}, {"name": "growth2_value"}, {"name": "growth3_value"},
+              {"name": "farming1_value"}, {"name": "farming2_value"}, {"name": "farming3_value"},
               {"name": "industry1_value"}, {"name": "industry2_value"}, {"name": "industry3_value"},
               {"name": "science1_value"}, {"name": "science2_value"}, {"name": "science3_value"},
               {"name": "money1_value"}, {"name": "money2_value"}, {"name": "money3_value"}]},
@@ -50,6 +51,18 @@ const std::string kList = R"({"patch_version": "test", "parameters": [
   "columns": [{"name": "starting_population"}, {"name": "starting_marines"}, {"name": "starting_money"}]},
  {"name": "no_starting_ships", "type": "integer", "min": 0, "max": 1, "default": 0},
  {"name": "starting_outpost_ship", "type": "integer", "min": 0, "max": 1, "default": 0},
+ {"name": "pop_max", "type": "table", "rows": [], "default": [5, 10, 15, 20, 25],
+  "columns": [{"name": "tiny"}, {"name": "small"}, {"name": "medium"}, {"name": "large"}, {"name": "huge"}]},
+ {"name": "pop_climate", "type": "table", "rows": [], "default": [25, 25, 25, 25, 25, 25, 40, 60, 80, 100],
+  "columns": [{"name": "toxic"}, {"name": "radiated"}, {"name": "barren"}, {"name": "desert"}, {"name": "tundra"},
+              {"name": "ocean"}, {"name": "swamp"}, {"name": "arid"}, {"name": "terran"}, {"name": "gaia"}]},
+ {"name": "pop_bonus_tolerant", "type": "integer", "min": 0, "max": 255, "default": 25},
+ {"name": "pop_bonus_subterranean", "type": "table", "rows": [], "default": [2, 4, 6, 8, 10],
+  "columns": [{"name": "tiny"}, {"name": "small"}, {"name": "medium"}, {"name": "large"}, {"name": "huge"}]},
+ {"name": "growth_formula_factor", "type": "integer", "min": 0, "max": 65535, "default": 2000},
+ {"name": "growth_rate_bonus", "type": "table", "rows": [], "default": [0, 25, 50, 100, -200],
+  "columns": [{"name": "general_modifier"}, {"name": "microbiotics_tech"}, {"name": "antidote_tech"},
+              {"name": "boom_event"}, {"name": "plague_event"}]},
 )" + test::techSettings() + "]}";
 
 Planet home(Climate climate = Climate::Terran, PlanetSize size = PlanetSize::Medium,
@@ -213,4 +226,43 @@ HGM_TEST("Empire: a turn adds income and research, and a field is learnt by twic
     HGM_CHECK(h.players[0].money == 57 && h.players[0].researched == 9);
     const EmpireSummary s = Economy(p).summary(h, 0);
     HGM_CHECK(s.research == 9 && s.researchField == 13 && s.researchTurns == 13);
+}
+
+HGM_TEST("Empire: how many people a planet holds and how fast they grow") {
+    const Parameters p = Parameters::defaults(kList);
+    const Economy e(p);
+    // Measured on the stock races' home colonies of eight: the game's own
+    // growth a turn.
+    HGM_CHECK(e.maxPopulation(race({}), home()) == 12 && e.growth(race({}), home(), 8) == 73);
+    HGM_CHECK(e.maxPopulation(race({{RacePicks::Subterranean, 1}}), home(Climate::Terran, PlanetSize::Large)) == 24);
+    HGM_CHECK(e.growth(race({{RacePicks::Subterranean, 1}, {RacePicks::Growth, 3}}), home(Climate::Terran, PlanetSize::Large), 8) ==
+              206); // Sakkra
+    HGM_CHECK(e.maxPopulation(race({{RacePicks::Tolerant, 1}}), home()) == 15);
+    HGM_CHECK(e.growth(race({{RacePicks::Tolerant, 1}, {RacePicks::Growth, 1}}), home(), 8) == 43); // Silicoids
+    HGM_CHECK(e.growth(race({{RacePicks::Aquatic, 1}}), home(Climate::Ocean), 8) == 86);           // Trilarians
+    HGM_CHECK(e.growth(race({}), home(), 12) == 0 && e.growth(race({}), home(), 0) == 0);
+
+    // A turn grows the colony; at a thousand there is one more person.
+    const TechTree tree(p);
+    Random random(1);
+    Game g = game(p, race({}), home());
+    endTurn(g, p, tree, random);
+    HGM_CHECK(g.colonies[0].population() == 8 && g.colonies[0].growth == 73);
+    g.colonies[0].growth = 990;
+    endTurn(g, p, tree, random);
+    HGM_CHECK(g.colonies[0].population() == 9 && g.colonies[0].growth == 63);
+}
+
+HGM_TEST("Empire: planets are named after their star and orbit") {
+    Galaxy g;
+    Star s;
+    s.name = "Altair";
+    g.stars.push_back(s);
+    for (int orbit = 0; orbit < 3; ++orbit) {
+        Planet planet;
+        planet.orbit = orbit;
+        g.planets.push_back(planet);
+    }
+    HGM_CHECK(planetName(g, 0, "Prime") == "Altair Prime");
+    HGM_CHECK(planetName(g, 2, "Prime") == "Altair III");
 }

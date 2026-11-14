@@ -196,6 +196,7 @@ public:
                 if (foodWorlds()) {
                     switches();
                     name();
+                    pictures();
                     return std::move(g_);
                 }
             }
@@ -204,6 +205,14 @@ public:
     }
 
 private:
+    // Which of its climate's three landscapes the colony screen shows
+    // (measured: each equally often, for every kind of planet).
+    void pictures() {
+        for (Planet& p : g_.planets) {
+            p.image = r_.between(0, kPlanetImages - 1);
+        }
+    }
+
     // One of the fan patch's map switches (the mapgen table).
     std::int64_t flag(std::string_view name) const { return p_.integer("mapgen", {}, name); }
 

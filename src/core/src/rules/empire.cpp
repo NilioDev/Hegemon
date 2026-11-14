@@ -5,6 +5,7 @@
 #include "hegemon/rules/random.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <span>
 #include <stdexcept>
 #include <utility>
@@ -30,6 +31,9 @@ constexpr int kTax2 = 2;
 // Measured: scientists are put to work until they make 3/5 of the base
 // research of everyone who doesn't farm (see docs/rules/start.md).
 constexpr int kScienceShareNum = 3, kScienceShareDen = 5;
+
+// Thousands of people grown that make a new person.
+constexpr int kGrown = 1000;
 
 // The buildings each home colony starts with (average technology).
 constexpr std::array<std::string_view, 2> kHomeBuildings = {"star_base", "marine_barracks"};
@@ -131,6 +135,39 @@ int Economy::scientistResearch100(const Player& player, const Planet& planet) co
         bonus = static_cast<int>(p_.integer("govt_bonus", {}, "democracy_science")) * kGovernmentStep;
     }
     return std::max(0, each) * (100 + bonus);
+}
+
+int Economy::maxPopulation(const Player& player, const Planet& planet) const {
+    auto climate = planet.climate;
+    // Measured on the Trilarians' home world, as for farming.
+    if (player.picks[RacePicks::Aquatic] != 0 && climate == Climate::Ocean) {
+        climate = Climate::Gaia;
+    }
+    const auto size = kSizeNames[static_cast<std::size_t>(planet.size)];
+    int most = static_cast<int>(p_.integer("pop_max", {}, size) *
+                                p_.integer("pop_climate", {}, kClimateNames[static_cast<std::size_t>(climate)]) / 100);
+    if (player.picks[RacePicks::Tolerant] != 0) {
+        most = most * (100 + static_cast<int>(p_.integer("pop_bonus_tolerant"))) / 100;
+    }
+    if (player.picks[RacePicks::Subterranean] != 0) {
+        most += static_cast<int>(p_.integer("pop_bonus_subterranean", {}, size));
+    }
+    return most;
+}
+
+int Economy::growth(const Player& player, const Planet& planet, int population) const {
+    const int most = maxPopulation(player, planet);
+    if (population <= 0 || most <= population) {
+        return 0;
+    }
+    // The fan patch's formula: the square root of FACTOR × people × room
+    // left ÷ room, rounded down; then the race's growth pick.
+    const std::int64_t factor = p_.integer("growth_formula_factor");
+    const auto base = static_cast<int>(
+        std::sqrt(static_cast<double>(factor * population * (most - population) / most)));
+    const int bonus = static_cast<int>(p_.integer("growth_rate_bonus", {}, "general_modifier")) +
+                      pickValue(player.picks, RacePicks::Growth, "growth");
+    return std::max(0, base * (100 + bonus) / 100);
 }
 
 std::array<int, kJobs> Economy::startingJobs(const Player& player, const Planet& planet, int population) const {
@@ -235,13 +272,44 @@ int researchTurns(int cost, int researched, int perTurn) {
     return (left + perTurn - 1) / perTurn;
 }
 
+std::string planetName(const Galaxy& galaxy, int planet, const std::string& prime) {
+    static constexpr std::array<std::string_view, kOrbits> kRoman = {"I", "II", "III", "IV", "V"};
+    const Planet& p = galaxy.planets.at(static_cast<std::size_t>(planet));
+    const std::string& star = galaxy.stars.at(static_cast<std::size_t>(p.star)).name;
+    if (p.orbit <= 0 || static_cast<std::size_t>(p.orbit) >= kOrbits) {
+        return star + " " + prime;
+    }
+    return star + " " + std::string(kRoman[static_cast<std::size_t>(p.orbit)]);
+}
+
 void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random) {
     const Economy economy(parameters);
     const bool fixedCost = parameters.integer("fixed_research_cost") != 0;
     const bool keep = parameters.integer("keep_research_on_breakthrough") != 0;
     ++game.stardate;
+    // The income and research are those of the turn that ends; the people
+    // grow after (assumed).
+    std::vector<EmpireSummary> summaries;
     for (std::size_t i = 0; i < game.players.size(); ++i) {
-        const EmpireSummary s = economy.summary(game, static_cast<int>(i));
+        summaries.push_back(economy.summary(game, static_cast<int>(i)));
+    }
+    for (Colony& c : game.colonies) {
+        const Player& player = game.players.at(static_cast<std::size_t>(c.player));
+        const Planet& planet = game.galaxy.planets.at(static_cast<std::size_t>(c.planet));
+        c.growth += economy.growth(player, planet, c.population());
+        // Measured: a thousand grown makes a new person. Assumed: who
+        // works, and that nothing is kept when the planet is full.
+        while (c.growth >= kGrown) {
+            c.growth -= kGrown;
+            if (c.population() < economy.maxPopulation(player, planet)) {
+                ++c.jobs[static_cast<std::size_t>(Job::Worker)];
+            } else {
+                c.growth = 0;
+            }
+        }
+    }
+    for (std::size_t i = 0; i < game.players.size(); ++i) {
+        const EmpireSummary& s = summaries[i];
         Player& player = game.players[i];
         player.money = std::max(0, player.money + s.income);
         if (player.research == 0) {

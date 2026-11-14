@@ -18,6 +18,7 @@ add_executable(hgm_tests
     test_empire.cpp
     test_research.cpp
     test_research_select.cpp
+    test_colony_screen.cpp
 )
 target_link_libraries(hgm_tests PRIVATE hegemon::core)
 target_compile_definitions(hgm_tests PRIVATE HEGEMON_GAMEDATA_DIR="${PROJECT_SOURCE_DIR}/gamedata")

@@ -42,6 +42,8 @@ enum class Special : std::uint8_t {
 inline constexpr std::size_t kOrbits = 5;
 inline constexpr int kNoPlanet = -1;
 
+inline constexpr int kPlanetImages = 3;
+
 struct Planet {
     int star = 0;
     int orbit = 0; // 0 is closest to the star
@@ -51,6 +53,7 @@ struct Planet {
     Gravity gravity = Gravity::Normal;
     Climate climate = Climate::Barren;
     Special special = Special::None;
+    int image = 0; // which of the climate's landscapes, 0 to kPlanetImages - 1
 };
 
 struct Star {
