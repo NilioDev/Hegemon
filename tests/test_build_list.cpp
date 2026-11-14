@@ -4,6 +4,7 @@
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/rules/production.hpp"
+#include "hegemon/rules/ship_design.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/rules/races.hpp"
@@ -63,6 +64,9 @@ HGM_TEST("Build list: ships, spies, housing and trade goods repeat; buildings do
     HGM_CHECK(c.buildList.size() == Colony::kBuildListLength);
     HGM_CHECK(!addToBuildList(c, kSpy));
     HGM_CHECK(repeatable(kOutpostShip) && repeatable(kTransportShip) && !repeatable(kColonyBase));
+    HGM_CHECK(repeatable("design1") && repeatable("design6") && !repeatable("design7"));
+    HGM_CHECK(designSlot("design3") == 2u && !designSlot("design0") && !designSlot("designs"));
+    HGM_CHECK(designProduct(5) == "design6");
 }
 
 HGM_TEST("Build list: what a new home colony can build, and what it costs") {
@@ -83,6 +87,60 @@ HGM_TEST("Build list: what a new home colony can build, and what it costs") {
     Game alone = game;
     alone.galaxy.stars[0].orbits[1] = kNoPlanet;
     HGM_CHECK(buildable(p, alone, 0).others.front() == "freighters");
+    // The six starting designs, costing what the designs say.
+    HGM_CHECK((b.designs == List{"design1", "design2", "design3", "design4", "design5", "design6"}));
+    const auto& designs = game.players[0].designs;
+    HGM_CHECK(productCost(p, "design1", designs) == 35 && productCost(p, "design2", designs) == designs[1].cost);
+    HGM_CHECK(productCost(p, "design1") == 0);
+}
+
+HGM_TEST("Build list: the designs on the right and their box") {
+    const fs::path folder = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(folder)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(folder);
+    Game game = alkariGame(data);
+    // A measured design of the original: a cruiser of 3 nuclear missiles,
+    // a heavy laser, 2 lasers with extended arcs and 4 bombs.
+    ShipDesign falcon;
+    falcon.hull = Hull::Cruiser;
+    falcon.nameIndex = 16;
+    falcon.image = 16;
+    falcon.computer = 1;
+    falcon.weapons = {{14, 3, kArcAll, 0, 5},
+                      {3, 1, kArcForward, kModHeavyMount, 0},
+                      {3, 2, kArcForwardExtended, 0, 0},
+                      {21, 4, kArcAll, 0, 10}};
+    falcon.cost = 391;
+    game.players[0].designs[3] = falcon;
+    const Economy economy(data.parameters());
+    const ColonyScreen colony(data, game, economy, 0);
+    BuildListScreen screen(data, game, economy, 0, colony.scene(), colony.palette());
+    const auto& right = screen.right();
+    HGM_CHECK(screen.name(right[6]) == "Scout" && screen.name(right[9]) == "Falcon I" && right[12].empty());
+    screen.hover(500, 20 + 19 * 9 + 5);
+    HGM_CHECK(screen.hoverName() == "Falcon I" && screen.costText() == "Cost Here: 391");
+    HGM_CHECK(screen.description().empty());
+    // Measured: the labels and values, then the weapons two to a line.
+    using T = BuildListScreen::PlacedText;
+    const auto has = [&](int x, int y, const std::string& text) {
+        for (const T& t : screen.designText()) {
+            if (t.x == x && t.y == y && t.text == text) {
+                return true;
+            }
+        }
+        return false;
+    };
+    HGM_CHECK(has(212, 114, "Cost to build:") && has(336, 114, "391"));
+    HGM_CHECK(has(212, 125, "Shield type:") && has(336, 125, "No Shield"));
+    HGM_CHECK(has(336, 136, "Electronic Computer") && has(336, 147, "Titanium Armor") && has(212, 158, "Drive type:"));
+    HGM_CHECK(has(336, 158, "Nuclear Drive") && has(212, 180, "Weapons:") && has(217, 191, "3 Nuclear Missiles"));
+    HGM_CHECK(has(336, 191, "1 Hv Laser Cannon") && has(217, 202, "2 Laser Cannons") && has(336, 202, "4 Nuclear Bombs"));
+    HGM_CHECK(screen.designText().size() == 15u);
+    screen.hover(500, 20 + 19 * 6 + 5);
+    HGM_CHECK(has(212, 213, "Specials:") && has(217, 224, "Extended Fuel Tanks") && has(217, 191, "1 Laser Cannon"));
+    HGM_CHECK(productName(data, "design4", &game.players[0]) == "Falcon I");
 }
 
 HGM_TEST("Build list: the lists, the box at the top and the build list") {

@@ -24,9 +24,12 @@ class GameData;
 class Economy;
 
 // The name the original gives a product (rules/production.hpp, or a
-// building of the fan patch's table). Throws FormatError when a file is
-// damaged.
-std::string productName(GameData& data, std::string_view product);
+// building of the fan patch's table); a design's comes from its `owner`.
+// Throws FormatError when a file is damaged.
+std::string productName(GameData& data, std::string_view product, const Player* owner = nullptr);
+// A design's name: its own, the race's name for it from SHIPNAME.LBX, or
+// the Scout's.
+std::string designName(GameData& data, int race, const ShipDesign& design);
 
 class BuildListScreen {
 public:
@@ -67,6 +70,13 @@ public:
     // below, broken into its lines (empty for housing and trade goods).
     const std::string& maintenanceText() const { return maintenanceText_; }
     const std::vector<std::vector<std::string>>& description() const { return description_; }
+    // For a design, the box below lists its parts instead: texts and where
+    // they go.
+    struct PlacedText {
+        int x = 0, y = 0;
+        std::string text;
+    };
+    const std::vector<PlacedText>& designText() const { return designText_; }
 
     // The mouse.
     void hover(int x, int y);
@@ -101,6 +111,8 @@ private:
     std::vector<std::pair<std::string, ProductPicture>> pictures_;
     std::vector<std::pair<std::string, std::string>> descriptions_; // product, text
     std::vector<std::pair<std::string, int>> maintenance_;          // buildings and the colony base
+    std::vector<std::pair<std::string, std::vector<PlacedText>>> designTexts_; // designs, by product
+    std::vector<PlacedText> designText_;
     std::string title_;
     std::string deleteFormat_, costFormat_, timeFormat_, maintenanceFormat_;
     int production_ = 0;

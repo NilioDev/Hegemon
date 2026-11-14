@@ -425,7 +425,8 @@ void makeGalaxy(App& app) {
             picks.push_back(p.picks);
         }
         app.game = std::make_unique<hegemon::Game>(
-            hegemon::startGame(app.data->parameters(), generator.generate(settings, random), picks, banners));
+            hegemon::startGame(app.data->parameters(), generator.generate(settings, random), picks, banners,
+                               random.next()));
         const hegemon::Galaxy& galaxy = app.game->galaxy;
         app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, galaxy, banners);
         app.tree = std::make_unique<hegemon::TechTree>(app.data->parameters());
@@ -577,7 +578,8 @@ void startBuy(App& app) {
     hegemon::Player& player = app.game->players.at(static_cast<std::size_t>(c.player));
     const hegemon::ColonyOutput out = hegemon::Economy(app.data->parameters()).output(*app.game, c);
     app.purchase =
-        hegemon::purchase(app.data->parameters(), c, player.money, std::max(0, out.production - out.upkeep));
+        hegemon::purchase(app.data->parameters(), c, player.money, std::max(0, out.production - out.upkeep),
+                          player.designs);
     using Kind = hegemon::Purchase::Kind;
     if (app.purchase.kind == Kind::Undo) {
         hegemon::buy(c, player.money, app.purchase);

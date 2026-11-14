@@ -47,7 +47,7 @@ int six(const Color& c, int channel) {
 
 } // namespace
 
-ProductPicture::ProductPicture(GameData& data, std::string_view product, int race) {
+ProductPicture::ProductPicture(GameData& data, std::string_view product, int race, int shipImage) {
     const Parameters& p = data.parameters();
     std::optional<Image> image;
     std::size_t frame = 0;
@@ -75,7 +75,9 @@ ProductPicture::ProductPicture(GameData& data, std::string_view product, int rac
         y = kShipY;
     };
     int picture = -1;
-    if (product == kColonyShip) {
+    if (shipImage >= 0) {
+        ship(static_cast<std::size_t>(shipImage));
+    } else if (product == kColonyShip) {
         ship(kColonyShipPicture);
     } else if (product == kOutpostShip) {
         ship(kOutpostShipPicture);

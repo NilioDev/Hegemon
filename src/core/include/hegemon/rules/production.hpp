@@ -7,6 +7,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +30,14 @@ inline constexpr std::string_view kOutpostShip = "outpost_ship";
 inline constexpr std::string_view kTransportShip = "transport_ship";
 inline constexpr std::string_view kSpy = "spy";
 
+struct ShipDesign;
+
+// A ship of one of the player's designs: "design1" to "design6", as the fan
+// patch's build queue settings name them.
+std::string designProduct(std::size_t slot);
+// The slot of a design product (0 for "design1"), or none.
+std::optional<std::size_t> designSlot(std::string_view product);
+
 // What a colony can add to its build list now, as the build list shows it.
 struct Buildable {
     // Trade goods, housing and the buildings, in the order of the fan
@@ -36,13 +46,16 @@ struct Buildable {
     std::vector<std::string> buildings;
     // Colony bases, freighters, the landing ships and spies.
     std::vector<std::string> others;
+    // The player's designs, by slot.
+    std::vector<std::string> designs;
 };
 
 // Throws std::out_of_range when a setting is missing.
 Buildable buildable(const Parameters& parameters, const Game& game, std::size_t colony);
 
-// The production a product costs; 0 for trade goods and housing.
-int productCost(const Parameters& parameters, std::string_view product);
+// The production a product costs; 0 for trade goods and housing. A design's
+// cost comes from the player's `designs` (0 when it has none in the slot).
+int productCost(const Parameters& parameters, std::string_view product, std::span<const ShipDesign> designs = {});
 
 // Where prod_format sorts a product of the left list: lower first.
 int productOrder(const Parameters& parameters, std::string_view product);
@@ -76,7 +89,8 @@ struct Purchase {
     int amount = 0;
     int shortBy = 0; // for Short: the price less the money
 };
-Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn);
+Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn,
+                  std::span<const ShipDesign> designs = {});
 
 // Carries out an Offer (pays and fills up the product) or an Undo (gives
 // back the BC and takes away the production); does nothing otherwise.

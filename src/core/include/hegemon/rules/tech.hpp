@@ -97,10 +97,13 @@ public:
     const std::string& field(int id) const;
     const std::string& category(TechCategory category) const;
     const std::string& tech(int id) const;
+    // The names after the techs (the categories, buildings, ship parts and
+    // more lists), counted from 0; none past the end.
+    const std::string* afterTechs(std::size_t index) const;
 
 private:
     std::vector<std::string> words_;
-    std::size_t fields_ = 0;
+    std::size_t fields_ = 0, techs_ = 0;
 };
 
 } // namespace hegemon

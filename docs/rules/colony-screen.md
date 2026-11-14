@@ -309,9 +309,23 @@ original:
   last is then spread to 248 pixels by widening the gaps evenly, the
   leftmost a pixel more where it doesn't share out (measured on Spy, Colony
   Base, Freighter Fleet and Outpost Ship). Housing and trade goods have
-  none; the ship designs show their details instead, still to come.
+  none.
+- A ship design (see [ship-design.md](ship-design.md)) shows its parts in
+  the box instead, measured pixel for pixel on two designs: font 1 with one
+  pixel between letters, in the build list's colours (dark and base shades)
+  without a shadow, 11 pixels a line from y 114. "Cost to build:" (ESTRINGS
+  99), "Shield type:" (119), "Computer type:" (98), "Armor type:" (91) and
+  "Drive type:" (not in the files) at x 212 with the cost and the parts'
+  names (TECHNAME.LBX) at 336; after an empty line "Weapons:" (130) and the
+  weapons two to a line at 217 and 336 ("3 Nuclear Missiles", "1 Hv Laser
+  Cannon": the count, the mods' short names and the weapon's name, plural
+  for more than one); after another empty line "Specials:" (129) and the
+  special systems the same way, when there are any. Its picture in the box
+  at the top is SHIPS.LBX entry of the design's picture number, like the
+  colony ship's.
 - Costs: buildings from the building table, colony, outpost and transport
-  ships from lander_ship_cost, freighters and spies from misc_costs.
+  ships from lander_ship_cost, freighters and spies from misc_costs, a
+  design its own cost.
 - Buttons: Cancel (COLBLDG 1) at (493, 447), OK (3) at (560, 447), each
   pressed in its second frame; Refit (4) at (492, 379) and Design (5) at
   (561, 379) are greyed while there is nothing to refit.
@@ -321,8 +335,7 @@ original:
 Choosing another planet of the system, the ship at the end of the
 production row, sending people to other planets, the people walking, the
 trees and spires, the star base in the sky, buildings built later,
-building what the build list holds, the ship designs and their
-details in the build list, Auto Build, Repeat
+Auto Build, Repeat
 Build, Refit and Design, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the
 mouse does on the screen.

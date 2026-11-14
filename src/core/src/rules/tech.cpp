@@ -181,7 +181,8 @@ int TechTree::researchable(const Knowledge& k, TechCategory category) const {
     return 0;
 }
 
-TechNames::TechNames(std::span<const std::uint8_t> entry, const TechTree& tree) : fields_(tree.fieldCount()) {
+TechNames::TechNames(std::span<const std::uint8_t> entry, const TechTree& tree)
+    : fields_(tree.fieldCount()), techs_(tree.techCount()) {
     words_.emplace_back();
     for (const auto b : entry) {
         if (b == 0) {
@@ -210,6 +211,11 @@ const std::string& TechNames::category(TechCategory category) const {
 
 const std::string& TechNames::tech(int id) const {
     return words_.at(fields_ + static_cast<std::size_t>(id));
+}
+
+const std::string* TechNames::afterTechs(std::size_t index) const {
+    const std::size_t at = fields_ + techs_ + 1 + index;
+    return at < words_.size() ? &words_[at] : nullptr;
 }
 
 } // namespace hegemon
