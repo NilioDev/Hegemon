@@ -7,6 +7,7 @@
 
 #include "hegemon/rules/galaxy.hpp"
 #include "hegemon/rules/races.hpp"
+#include "hegemon/rules/tech.hpp"
 
 #include <array>
 #include <cstdint>
@@ -17,6 +18,7 @@
 namespace hegemon {
 
 class Parameters;
+class Random;
 
 enum class Job : std::uint8_t { Farmer, Worker, Scientist };
 inline constexpr std::size_t kJobs = 3;
@@ -45,6 +47,9 @@ struct Player {
     std::size_t banner = 0;
     bool human = false;
     int money = 0; // BC in the treasury
+    Knowledge knowledge;
+    int research = 0;   // the field being researched, 0 for none
+    int researched = 0; // research points put into it so far
 };
 
 struct Game {
@@ -75,6 +80,9 @@ struct EmpireSummary {
     int food = 0;              // left over, whole units
     int freighters = 0;
     int freightersUsed = 0;
+    int research = 0;      // research points a turn
+    int researchField = 0; // the project, 0 for none
+    int researchTurns = 0; // about how many turns it takes
 };
 
 class Economy {
@@ -103,6 +111,15 @@ private:
 
     const Parameters& p_;
 };
+
+// The turns a project takes by the side panel's estimate: until one and a
+// half times its cost (measured), at least one.
+int researchTurns(int cost, int researched, int perTurn);
+
+// Ends the turn: the stardate moves on a tenth of a year, and each player
+// gets the turn's income and research. A field whose research is done is
+// learnt (see docs/rules/research.md) and the player has no project then.
+void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random);
 
 // Starts a game in the galaxy: a home colony, ships and money for each
 // player (with average technology). `picks` and `banners` are in the order

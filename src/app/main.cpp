@@ -20,8 +20,10 @@
 #include "hegemon/rules/empire.hpp"
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
+#include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/race_select.hpp"
+#include "hegemon/ui/research_select.hpp"
 #include "hegemon/ui/ruler_name.hpp"
 #include "hegemon/version.hpp"
 
@@ -59,6 +61,9 @@ struct App {
     std::unique_ptr<hegemon::Game> game;
     std::unique_ptr<hegemon::GalaxyMap> map;
     std::unique_ptr<hegemon::NameBox> homeName; // over the map at first
+    std::unique_ptr<hegemon::TechTree> tree;
+    std::unique_ptr<hegemon::Random> gameRandom;
+    std::unique_ptr<hegemon::ResearchSelectScreen> research; // when the turn ends without a project
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -343,6 +348,7 @@ void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
 void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
+    app.research.reset();
     app.map.reset();
     app.game.reset();
     app.generating.reset();
@@ -358,6 +364,11 @@ void backToMainMenu(App& app) {
 // Makes the galaxy for the New Game settings: the human with the race and
 // banner taken, the computer players with other stock races and banners at
 // random. Then the galaxy map, asking for the home star's name.
+// The side panel shows the human's empire as it is now.
+void updatePanel(App& app) {
+    app.map->setPanel(app.game->stardate, hegemon::Economy(app.data->parameters()).summary(*app.game, 0));
+}
+
 void makeGalaxy(App& app) {
     try {
         hegemon::GalaxySettings settings;
@@ -400,7 +411,9 @@ void makeGalaxy(App& app) {
             hegemon::startGame(app.data->parameters(), generator.generate(settings, random), picks, banners));
         const hegemon::Galaxy& galaxy = app.game->galaxy;
         app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, galaxy, banners);
-        app.map->setPanel(app.game->stardate, hegemon::Economy(app.data->parameters()).summary(*app.game, 0));
+        app.tree = std::make_unique<hegemon::TechTree>(app.data->parameters());
+        app.gameRandom = std::make_unique<hegemon::Random>(app.random());
+        updatePanel(app);
         app.map->setFleets({galaxy.homes.at(0).star});
         const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
         app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
@@ -436,9 +449,98 @@ void acceptHomeName(App& app) {
     SDL_StopTextInput(app.window);
 }
 
-// The galaxy map. For now only the home star's name can be given; Esc or B
-// goes back to the main menu.
+// The turn ends: first the human chooses a research project if there is
+// none, as the original asks.
+void endTurn(App& app) {
+    hegemon::Player& human = app.game->players.at(0);
+    if (human.research == 0) {
+        app.research = std::make_unique<hegemon::ResearchSelectScreen>(*app.data, *app.tree, human.knowledge,
+                                                                        human.race, app.pointer->x(), app.pointer->y());
+        app.pointer->useEntry(hegemon::ResearchSelectScreen::kPointerEntry);
+        return;
+    }
+    hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
+    updatePanel(app);
+}
+
+void chooseResearch(App& app, int field) {
+    hegemon::Player& human = app.game->players.at(0);
+    if (field != human.research) {
+        human.research = field;
+        human.researched = 0;
+    }
+    app.research.reset();
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+    endTurn(app);
+}
+
+SDL_AppResult researchEvent(App& app, SDL_Event* event) {
+    auto& screen = *app.research;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        screen.pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            screen.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto field = screen.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                chooseResearch(app, *field);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            if (const auto field = screen.choose()) {
+                chooseResearch(app, *field);
+            }
+        } else if (event->key.key == SDLK_LEFT || event->key.key == SDLK_UP) {
+            app.pointer->hide();
+            screen.moveHighlight(event->key.key == SDLK_LEFT ? -1 : -2);
+        } else if (event->key.key == SDLK_RIGHT || event->key.key == SDLK_DOWN) {
+            app.pointer->hide();
+            screen.moveHighlight(event->key.key == SDLK_RIGHT ? 1 : 2);
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        app.pointer->hide();
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+            screen.moveHighlight(-2);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            screen.moveHighlight(2);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            screen.moveHighlight(-1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            screen.moveHighlight(1);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            if (const auto field = screen.choose()) {
+                chooseResearch(app, *field);
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+// The galaxy map: the home star's name first, then the Turn button (also
+// Enter, or the gamepad's Start); Esc or B goes back to the main menu.
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
+    if (app.research) {
+        return researchEvent(app, event);
+    }
     if (app.homeName) {
         auto& box = *app.homeName;
         switch (event->type) {
@@ -475,6 +577,15 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
         default:
             return SDL_APP_CONTINUE;
         }
+    }
+    const bool turn =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
+         hegemon::GalaxyMap::kTurnButton.contains(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) ||
+        (event->type == SDL_EVENT_KEY_DOWN && (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER)) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_START);
+    if (turn) {
+        endTurn(app);
+        return SDL_APP_CONTINUE;
     }
     const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
                       (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
@@ -797,7 +908,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->map) {
+        if (app->research) {
+            app->research->tick(elapsed);
+            app->research->draw(app->canvas, app->palette);
+        } else if (app->map) {
             app->map->draw(app->canvas, app->palette);
             if (app->homeName) {
                 app->homeName->tick(elapsed);

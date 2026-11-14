@@ -117,6 +117,21 @@ HGM_TEST("Galaxy map: the side panel and the fleet at the home star") {
         }
     }
     HGM_CHECK(changed > 30);
+
+    // With a project: "~11 turns" above "10 RP" in place of "none".
+    s.research = 10;
+    s.researchField = 4;
+    s.researchTurns = 11;
+    map.setPanel(35001, s);
+    Canvas research(640, 480, 99);
+    map.draw(research, palette);
+    int above = 0;
+    for (int y = 391; y < 401; ++y) {
+        for (int x = 560; x < 615; ++x) {
+            above += research.at(x, y) == 23 && after.at(x, y) != 23 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(above > 40);
 }
 
 HGM_TEST("Galaxy map: the Enter Home Star Name box") {

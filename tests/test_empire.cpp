@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "tech_list.hpp"
 #include "test.hpp"
 
 #include "hegemon/config/parameters.hpp"
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/rules/empire.hpp"
+#include "hegemon/rules/random.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -17,7 +19,7 @@ namespace {
 
 // The settings an empire needs, in the fan patch's layout, with the
 // classic values.
-constexpr const char* kList = R"({"patch_version": "test", "parameters": [
+const std::string kList = R"({"patch_version": "test", "parameters": [
  {"name": "food_farmer_base", "type": "table", "rows": [], "default": [0, 0, 0, 2, 2, 4, 4, 2, 4, 6],
   "columns": [{"name": "toxic"}, {"name": "radiated"}, {"name": "barren"}, {"name": "desert"}, {"name": "tundra"},
               {"name": "ocean"}, {"name": "swamp"}, {"name": "arid"}, {"name": "terran"}, {"name": "gaia"}]},
@@ -47,8 +49,8 @@ constexpr const char* kList = R"({"patch_version": "test", "parameters": [
  {"name": "starting_condition", "type": "table", "rows": [], "default": [8, 3, 50],
   "columns": [{"name": "starting_population"}, {"name": "starting_marines"}, {"name": "starting_money"}]},
  {"name": "no_starting_ships", "type": "integer", "min": 0, "max": 1, "default": 0},
- {"name": "starting_outpost_ship", "type": "integer", "min": 0, "max": 1, "default": 0}
-]})";
+ {"name": "starting_outpost_ship", "type": "integer", "min": 0, "max": 1, "default": 0},
+)" + test::techSettings() + "]}";
 
 Planet home(Climate climate = Climate::Terran, PlanetSize size = PlanetSize::Medium,
             Minerals minerals = Minerals::Abundant) {
@@ -177,4 +179,38 @@ HGM_TEST("Empire: the stock races start as measured on the original") {
                         g.colonies[0].jobs[1], g.colonies[0].jobs[2], s.income, s.food);
         }
     }
+}
+
+HGM_TEST("Empire: a turn adds income and research, and a field is learnt by twice its cost") {
+    const Parameters p = Parameters::defaults(kList);
+    const TechTree tree(p);
+    Game g;
+    Player player;
+    player.money = 50;
+    player.knowledge = tree.averageStart();
+    player.research = 13;
+    g.players.push_back(player);
+    Random random(1);
+    endTurn(g, p, tree, random);
+    HGM_CHECK(g.stardate == 35001 && g.players[0].money == 50 && g.players[0].researched == 0);
+    // Without colonies there is no income or research; put in all but the
+    // last point.
+    g.players[0].researched = 159;
+    endTurn(g, p, tree, random);
+    // 159 of 80 may or may not have broken through; 160 always does.
+    if (g.players[0].research != 0) {
+        g.players[0].researched = 160;
+        endTurn(g, p, tree, random);
+    }
+    HGM_CHECK(g.players[0].research == 0 && g.players[0].researched == 0);
+    HGM_CHECK(g.players[0].knowledge.knowsField(13) && g.players[0].knowledge.knowsTech(3));
+    HGM_CHECK(!g.players[0].knowledge.knowsTech(4)); // one application, until there is a choice
+
+    // A new game's empire: +7 BC and three scientists' 9 RP a turn.
+    Game h = game(p, race({}), home());
+    h.players[0].research = 13;
+    endTurn(h, p, tree, random);
+    HGM_CHECK(h.players[0].money == 57 && h.players[0].researched == 9);
+    const EmpireSummary s = Economy(p).summary(h, 0);
+    HGM_CHECK(s.research == 9 && s.researchField == 13 && s.researchTurns == 13);
 }
