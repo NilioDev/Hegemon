@@ -25,6 +25,7 @@ constexpr std::size_t kDeleteMessage = 257;   // "delete %s"
 constexpr std::size_t kTitleMessage = 210;    // "Build List for %s"
 constexpr std::size_t kTimeMessage = 211;     // "Build Time: %d"
 constexpr std::size_t kCostMessage = 242;     // "Cost Here: %d"
+constexpr std::size_t kMaintenanceMessage = 367; // "Maint. Cost: %d"
 constexpr std::size_t kFreightersMessage = 301, kHousingMessage = 322, kSpyMessage = 492, kTradeGoodsMessage = 541,
                       kTransportMessage = 542;
 constexpr std::size_t kLastMessage = 542;
@@ -47,7 +48,20 @@ constexpr std::uint8_t kQueueBoxColour = 239;
 constexpr Rect kTitleBox = {231, 307, 202, 21};
 constexpr int kLineBoxX = 206, kLineBoxY = 331, kLineBoxW = 255, kLineBoxH = 17;
 // The box at the top: the name in font 4, the cost and the time in font 3.
-constexpr int kInfoX = 306, kInfoNameY = 21, kInfoCostY = 47, kInfoTimeY = 60;
+// A building's or the colony base's maintenance goes at 60 and the time a
+// line lower.
+constexpr int kInfoX = 306, kInfoNameY = 21, kInfoCostY = 47, kInfoTimeY = 60, kInfoStep = 13;
+// The description in the box below, measured: the product's tech's help
+// text (HELP.LBX, from byte 103 of its record) in font 3 with one pixel
+// between letters, from (209, 119), 15 pixels a line. Words go on a line
+// while it is at most 249 pixels wide with 3 between words; every line but
+// the last is then spread to 248 by widening the gaps, the leftmost ones a
+// pixel more where it doesn't share out evenly.
+constexpr const char* kHelpArchive = "HELP.LBX";
+constexpr std::size_t kHelpTextAt = 103;
+constexpr std::size_t kDescriptionFont = 3;
+constexpr int kDescriptionSpacing = 1, kDescriptionX = 209, kDescriptionY = 119, kDescriptionStep = 15;
+constexpr int kDescriptionWrap = 249, kDescriptionWidth = 248, kWordGap = 3;
 // The right list: the ships and spies at their rows (the designs, rows 6
 // to 11, are still to come).
 constexpr std::size_t kSpyRow = 13;
@@ -81,6 +95,48 @@ int level(const Color& c, bool odd) {
 
 int six(std::uint8_t v) {
     return (v * 63 + 127) / 255;
+}
+
+// The tech whose help text describes a product: the ships' and the colony
+// base's own, the freighters', "transport" and "spy_network"; a building's
+// tech_id. 0 for housing and trade goods.
+int productTech(const Parameters& p, std::string_view product) {
+    if (product == kTradeGoods || product == kHousing) {
+        return 0;
+    }
+    if (product == kColonyShip || product == kOutpostShip || product == kColonyBase || product == kFreighters) {
+        return static_cast<int>(p.integer("tech", {product}, "id"));
+    }
+    if (product == kTransportShip) {
+        return static_cast<int>(p.integer("tech", {"transport"}, "id"));
+    }
+    if (product == kSpy) {
+        return static_cast<int>(p.integer("tech", {"spy_network"}, "id"));
+    }
+    return static_cast<int>(p.integer("building", {product}, "tech_id"));
+}
+
+std::vector<std::vector<std::string>> wrapDescription(const Font& font, const std::string& text) {
+    std::vector<std::vector<std::string>> lines;
+    int width = 0;
+    std::size_t at = 0;
+    while (at < text.size()) {
+        const std::size_t end = std::min(text.find(' ', at), text.size());
+        std::string word = text.substr(at, end - at);
+        at = end + 1;
+        if (word.empty()) {
+            continue;
+        }
+        const int w = font.textWidth(word, kDescriptionSpacing);
+        if (!lines.empty() && !lines.back().empty() && width + kWordGap + w <= kDescriptionWrap) {
+            width += kWordGap + w;
+            lines.back().push_back(std::move(word));
+        } else {
+            width = w;
+            lines.push_back({std::move(word)});
+        }
+    }
+    return lines;
 }
 
 TextStyle style(const std::array<std::uint8_t, 3>& colours) {
@@ -213,6 +269,7 @@ BuildListScreen::BuildListScreen(GameData& data, const Game& game, const Economy
     deleteFormat_ = messages[kDeleteMessage];
     costFormat_ = messages[kCostMessage];
     timeFormat_ = messages[kTimeMessage];
+    maintenanceFormat_ = messages[kMaintenanceMessage];
 
     const Buildable b = buildable(p, game, colony);
     names_.emplace_back(std::string(kTradeGoods), messages[kTradeGoodsMessage]);
@@ -242,9 +299,18 @@ BuildListScreen::BuildListScreen(GameData& data, const Game& game, const Economy
         }
     }
     const int race = game.players.at(static_cast<std::size_t>(colony_.player)).race;
+    const TextTable help = TextTable::parse(data.archive(kHelpArchive).entry(0), kHelpTextAt);
     for (const auto& [product, unused] : names_) {
         costs_.emplace_back(product, productCost(p, product));
         pictures_.emplace_back(product, ProductPicture(data, product, race));
+        const int tech = productTech(p, product);
+        if (tech > 0 && static_cast<std::size_t>(tech) < help.size()) {
+            descriptions_.emplace_back(product, help.at(static_cast<std::size_t>(tech)));
+        }
+        if (product != kTradeGoods && product != kHousing && product != kFreighters && product != kColonyShip &&
+            product != kOutpostShip && product != kTransportShip && product != kSpy) {
+            maintenance_.emplace_back(product, static_cast<int>(p.integer("building", {product}, "maintenance")));
+        }
     }
     const ColonyOutput out = economy.output(game, game.colonies.at(colony));
     production_ = std::max(0, out.production - out.upkeep);
@@ -310,6 +376,8 @@ void BuildListScreen::setHovered(std::optional<Slot> slot) {
     hoverName_.clear();
     costText_.clear();
     timeText_.clear();
+    maintenanceText_.clear();
+    description_.clear();
     const std::string* product = slot ? productAt(*slot) : nullptr;
     if (product == nullptr) {
         hovered_.reset();
@@ -327,6 +395,16 @@ void BuildListScreen::setHovered(std::optional<Slot> slot) {
         // Assumed: with no production the time is left out.
         if (production_ > 0) {
             timeText_ = formatMessage(timeFormat_, {static_cast<long long>((cost + production_ - 1) / production_)});
+        }
+    }
+    for (const auto& [key, value] : maintenance_) {
+        if (key == *product) {
+            maintenanceText_ = formatMessage(maintenanceFormat_, {static_cast<long long>(value)});
+        }
+    }
+    for (const auto& [key, text] : descriptions_) {
+        if (key == *product) {
+            description_ = wrapDescription(fonts_.font(kDescriptionFont), text);
         }
     }
 }
@@ -480,7 +558,37 @@ void BuildListScreen::draw(Canvas& canvas, Palette& palette) const {
         }
         listFont.draw(canvas, kInfoX, kInfoNameY, hoverName_, normal);
         queueFont.draw(canvas, kInfoX, kInfoCostY, costText_, normal);
-        queueFont.draw(canvas, kInfoX, kInfoTimeY, timeText_, normal);
+        int y = kInfoTimeY;
+        if (!maintenanceText_.empty()) {
+            queueFont.draw(canvas, kInfoX, y, maintenanceText_, normal);
+            y += kInfoStep;
+        }
+        queueFont.draw(canvas, kInfoX, y, timeText_, normal);
+
+        const Font& font = fonts_.font(kDescriptionFont);
+        TextStyle text = normal;
+        text.spacing = kDescriptionSpacing;
+        for (std::size_t k = 0; k < description_.size(); ++k) {
+            const auto& words = description_[k];
+            const int gaps = static_cast<int>(words.size()) - 1;
+            int extra = 0;
+            if (k + 1 < description_.size() && gaps > 0) {
+                int width = kWordGap * gaps;
+                for (const auto& w : words) {
+                    width += font.textWidth(w, kDescriptionSpacing);
+                }
+                extra = std::max(0, kDescriptionWidth - width);
+            }
+            int x = kDescriptionX;
+            const int ly = kDescriptionY + kDescriptionStep * static_cast<int>(k);
+            for (std::size_t i = 0; i < words.size(); ++i) {
+                font.draw(canvas, x, ly, words[i], text);
+                x += font.textWidth(words[i], kDescriptionSpacing) + kWordGap;
+                if (gaps > 0) {
+                    x += extra / gaps + (static_cast<int>(i) < extra % gaps ? 1 : 0);
+                }
+            }
+        }
     }
 }
 
