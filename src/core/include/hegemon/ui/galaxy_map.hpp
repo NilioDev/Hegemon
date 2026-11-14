@@ -25,6 +25,8 @@ class GalaxyMap {
 public:
     // Where the map shows through the frame.
     static constexpr Rect kView = {20, 20, 508, 402};
+    // The Turn button under the side panel (measured).
+    static constexpr Rect kTurnButton = {547, 444, 58, 19};
     // The pointers in the game's colours: entry 1 of FONTS.LBX.
     static constexpr std::size_t kPointerEntry = 1;
 

@@ -2,8 +2,10 @@
 #include "hegemon/rules/empire.hpp"
 
 #include "hegemon/config/parameters.hpp"
+#include "hegemon/rules/random.hpp"
 
 #include <algorithm>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -33,6 +35,20 @@ constexpr int kScienceShareNum = 3, kScienceShareDen = 5;
 constexpr std::array<std::string_view, 2> kHomeBuildings = {"star_base", "marine_barracks"};
 
 int government(const Player& player) { return player.picks[RacePicks::Government]; }
+
+// A field's cost in research points, by its id.
+int cost(const Parameters& p, int field) {
+    const ParameterDefinition* d = p.definition("tech_field");
+    if (d == nullptr || d->rowNames.empty()) {
+        return 0;
+    }
+    for (std::size_t r = 0; r < d->rowNames[0].size(); ++r) {
+        if (p.integer("tech_field", {d->rowNames[0][r]}, "id") == field) {
+            return static_cast<int>(p.integer("tech_field", {d->rowNames[0][r]}, "cost"));
+        }
+    }
+    return 0;
+}
 
 } // namespace
 
@@ -185,6 +201,7 @@ EmpireSummary Economy::summary(const Game& game, int player) const {
         const ColonyOutput o = output(game, c);
         income2 += o.income2;
         food2 += o.food2 - o.eaten2;
+        s.research += o.research;
         for (const std::string_view base : {"star_base", "battlestation", "star_fortress"}) {
             if (c.has(base)) {
                 s.commandPoints += static_cast<int>(p_.integer("command_points", {}, base));
@@ -203,7 +220,55 @@ EmpireSummary Economy::summary(const Game& game, int player) const {
     // Halves round up (measured: +6.5 BC shows as +7).
     s.income = income2 >= 0 ? (income2 + 1) / 2 : -((-income2) / 2);
     s.food = food2 >= 0 ? food2 / 2 : -((-food2 + 1) / 2);
+    s.researchField = who.research;
+    if (who.research != 0) {
+        s.researchTurns = researchTurns(cost(p_, who.research), who.researched, s.research);
+    }
     return s;
+}
+
+int researchTurns(int cost, int researched, int perTurn) {
+    const int left = cost * 3 / 2 - researched;
+    if (perTurn <= 0 || left <= 0) {
+        return 1;
+    }
+    return (left + perTurn - 1) / perTurn;
+}
+
+void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random) {
+    const Economy economy(parameters);
+    const bool fixedCost = parameters.integer("fixed_research_cost") != 0;
+    const bool keep = parameters.integer("keep_research_on_breakthrough") != 0;
+    ++game.stardate;
+    for (std::size_t i = 0; i < game.players.size(); ++i) {
+        const EmpireSummary s = economy.summary(game, static_cast<int>(i));
+        Player& player = game.players[i];
+        player.money = std::max(0, player.money + s.income);
+        if (player.research == 0) {
+            continue;
+        }
+        player.researched += s.research;
+        const TechField& field = tree.field(player.research);
+        // A breakthrough is certain at twice the cost; from the cost on
+        // it may come early (the chance is assumed to grow evenly).
+        bool done = player.researched >= 2 * field.cost;
+        if (!done && !fixedCost && player.researched >= field.cost && field.cost > 0) {
+            done = static_cast<int>(random.below(static_cast<std::uint32_t>(field.cost))) <
+                   player.researched - field.cost;
+        }
+        if (!done) {
+            continue;
+        }
+        // Until the screen that offers the applications: a creative race
+        // gets them all, others the first.
+        std::span<const int> techs = field.techs;
+        if (player.picks[RacePicks::Creative] == 0) {
+            techs = techs.first(std::min<std::size_t>(techs.size(), 1));
+        }
+        tree.learn(player.knowledge, field.id, techs);
+        player.researched = keep ? std::max(0, player.researched - 2 * field.cost) : 0;
+        player.research = 0;
+    }
 }
 
 Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<RacePicks>& picks,
@@ -212,6 +277,7 @@ Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<Ra
         throw std::invalid_argument("startGame: one race and banner per home system");
     }
     const Economy economy(parameters);
+    const TechTree tree(parameters);
     Game game;
     game.galaxy = std::move(galaxy);
     const int population = static_cast<int>(parameters.integer("starting_condition", {}, "starting_population"));
@@ -226,6 +292,7 @@ Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<Ra
         player.banner = banners[i];
         player.human = i == 0;
         player.money = money;
+        player.knowledge = tree.averageStart();
         game.players.push_back(player);
 
         Colony colony;

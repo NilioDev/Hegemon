@@ -72,13 +72,25 @@ the spacing after each letter (the stardate: 580 − w / 2).
 | Command points left, and in all | +3 (6) | 181 |
 | Food left over | +0 | 255 |
 | Freighters left, and in all | +0 (0) | 330 |
-| Research project | none (HESTRNGS.LBX message 392) | 403 |
+| Research project's turns | ~11 turns | 391 |
+| Research points a turn, or no project | 10 RP, none (HESTRNGS.LBX message 392) | 403 |
 
 The command points and the freighters are two texts each: the first ends
 (with its spacing) at x 578, the second starts at 582 (freighters: 576 and
 578). The command points' total in brackets has no outline. These places
 were measured with one-digit numbers only. What the numbers are is in
 [economy.md](economy.md).
+
+The turns line is only there with a project. It starts with font 2's "@",
+which is a wavy line, drawn 3 pixels lower than the rest; the whole text
+(with the "@") is placed at x = 584 − (w + 1) / 2. Measured on three turns
+of one game: ~11, ~10 and ~9 turns; how the number is worked out is in
+[research.md](research.md).
+
+## The Turn button
+
+The Turn button under the side panel, about (547, 444) to (604, 462), ends
+the turn. Hegemon also takes Enter and the gamepad's Start.
 
 ## Enter Home Star Name
 
@@ -91,8 +103,7 @@ STARNAME.LBX, in colours 12 and 24.
 
 ## Still to do
 
-Wider numbers on the side panel, a research project's name, the Turn
-button, other players' fleets and fleets in flight, the black holes'
+Wider numbers on the side panel, the Turn button's pressed picture, other players' fleets and fleets in flight, the black holes'
 animation, the sky's twinkling, the nebulae on the frame's bottom row (the
 original draws a nebula's pixels on row 421 over the frame there), the names
 under stars of other sizes on the other maps, zooming and scrolling, and

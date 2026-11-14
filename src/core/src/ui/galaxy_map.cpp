@@ -63,6 +63,8 @@ constexpr std::uint8_t kPanelShade1 = 14, kPanelShade2 = 23;
 constexpr int kPanelCentre = 579, kStardateCentre = 580;
 constexpr int kStardateY = 29, kMoneyY = 96, kIncomeY = 108, kCommandY = 181, kFoodY = 255, kFreightY = 330,
               kResearchY = 403;
+// The research project's estimate, above its research points.
+constexpr int kTurnsCentre = 584, kTurnsY = 391, kWaveDrop = 3;
 // Command points and freighters are two texts: the first ends at the
 // first x (with its spacing), the second starts at the other.
 constexpr int kCommandSplit[2] = {578, 582};
@@ -226,7 +228,20 @@ void GalaxyMap::drawPanel(Canvas& canvas) const {
     centred(signedNumber(summary_.food), kPanelCentre, kFoodY);
     split(signedNumber(summary_.freighters - summary_.freightersUsed), "(" + std::to_string(summary_.freighters) + ")",
           kFreightSplit, kFreightY);
-    centred(none_, kPanelCentre, kResearchY);
+    if (summary_.researchField == 0) {
+        centred(none_, kPanelCentre, kResearchY);
+        return;
+    }
+    // Measured: the estimate starts with the font's wavy line (its "@"),
+    // drawn three pixels lower than the text, and is centred a little
+    // further right, its odd pixel to the left.
+    const std::string turns = std::to_string(summary_.researchTurns) + " turns";
+    const std::string wave = "@";
+    const int whole = font.textWidth(wave + turns, kPanelSpacing);
+    const int x = kTurnsCentre - (whole + 1) / 2;
+    font.draw(canvas, x, kTurnsY + kWaveDrop, wave, style);
+    font.draw(canvas, x + whole - font.textWidth(turns, kPanelSpacing), kTurnsY, turns, style);
+    centred(std::to_string(summary_.research) + " RP", kPanelCentre, kResearchY);
 }
 
 } // namespace hegemon
