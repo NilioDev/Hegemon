@@ -133,6 +133,9 @@ public:
 
     // Half food a farmer grows, before the government's bonus.
     int farmerFood2(const Player& player, const Planet& planet) const;
+    // Production a worker makes, before the government's bonus and
+    // pollution.
+    int workerProduction(const Player& player, const Planet& planet) const;
     // Research a scientist makes, in hundredths, with the government.
     int scientistResearch100(const Player& player, const Planet& planet) const;
     // How many of the race's people the planet can hold.
@@ -155,6 +158,15 @@ private:
 // The turns a project takes by the side panel's estimate: until one and a
 // half times its cost (measured), at least one.
 int researchTurns(int cost, int researched, int perTurn);
+
+// The planets at `star` a colony ship can settle: planets (not asteroid
+// belts or gas giants) without a colony, in the order of their orbits.
+std::vector<int> colonySites(const Game& game, int star);
+
+// A colony ship lands on `planet`: a new colony of one person of its
+// player's race, a worker (measured on Sal Prime), and the ship is gone.
+// Returns the colony's index.
+std::size_t foundColony(Game& game, std::size_t ship, int planet);
 
 // A planet's name: its star's, then "Prime" (`prime`, from HESTRNGS.LBX)
 // for the star's first planet or a Roman number for the others, counting

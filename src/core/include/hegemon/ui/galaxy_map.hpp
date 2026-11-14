@@ -91,5 +91,8 @@ private:
 // The Enter Home Star Name box over the map, offering `name`. Throws
 // FormatError when a file is damaged.
 NameBox homeStarNameBox(GameData& data, std::string name);
+// The Enter Star Name box with its top left corner at (x, y): after a
+// colony ship lands the original asks for the star's name at (177, 130).
+NameBox starNameBox(GameData& data, std::string name, int x, int y);
 
 } // namespace hegemon

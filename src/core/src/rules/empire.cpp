@@ -106,11 +106,14 @@ int Economy::eaten2(const Player& player, int population) const {
     return player.picks[RacePicks::Cybernetic] != 0 ? population : 2 * population;
 }
 
+int Economy::workerProduction(const Player& player, const Planet& planet) const {
+    return std::max(0, static_cast<int>(p_.integer("production_worker_base", {},
+                                                   kMineralNames[static_cast<std::size_t>(planet.minerals)])) +
+                           pickValue(player.picks, RacePicks::Industry, "industry"));
+}
+
 int Economy::production(const Player& player, const Planet& planet, int workers, int* pollution) const {
-    const int perWorker =
-        static_cast<int>(p_.integer("production_worker_base", {}, kMineralNames[static_cast<std::size_t>(planet.minerals)])) +
-        pickValue(player.picks, RacePicks::Industry, "industry");
-    int made = workers * std::max(0, perWorker);
+    int made = workers * workerProduction(player, planet);
     if (government(player) == kUnification) {
         made = made * (100 + static_cast<int>(p_.integer("govt_bonus", {}, "unification_production")) * kGovernmentStep) / 100;
     }
@@ -302,6 +305,35 @@ int researchTurns(int cost, int researched, int perTurn) {
         return 1;
     }
     return (left + perTurn - 1) / perTurn;
+}
+
+std::vector<int> colonySites(const Game& game, int star) {
+    std::vector<int> sites;
+    const Star& s = game.galaxy.stars.at(static_cast<std::size_t>(star));
+    for (const int index : s.orbits) {
+        if (index < 0 || static_cast<std::size_t>(index) >= game.galaxy.planets.size()) {
+            continue;
+        }
+        const bool settled = std::any_of(game.colonies.begin(), game.colonies.end(),
+                                         [&](const Colony& c) { return c.planet == index; });
+        if (game.galaxy.planets[static_cast<std::size_t>(index)].type == SatelliteType::Planet && !settled) {
+            sites.push_back(index);
+        }
+    }
+    return sites;
+}
+
+std::size_t foundColony(Game& game, std::size_t ship, int planet) {
+    const Ship landing = game.ships.at(ship);
+    Colony colony;
+    colony.player = landing.player;
+    colony.planet = planet;
+    // Measured: the one colonist on Sal Prime works in industry, though
+    // a farmer there would feed it; assumed for every new colony.
+    colony.jobs[static_cast<std::size_t>(Job::Worker)] = 1;
+    game.colonies.push_back(std::move(colony));
+    game.ships.erase(game.ships.begin() + static_cast<std::ptrdiff_t>(ship));
+    return game.colonies.size() - 1;
 }
 
 std::string planetName(const Galaxy& galaxy, int planet, const std::string& prime) {

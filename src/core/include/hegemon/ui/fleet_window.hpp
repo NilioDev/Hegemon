@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,7 +24,7 @@ class GameData;
 
 class FleetWindow {
 public:
-    enum class Action : std::uint8_t { None, Close };
+    enum class Action : std::uint8_t { None, Close, Colonize };
 
     // The fleet's ships, all chosen. Throws FormatError when a file is
     // damaged.
@@ -42,9 +43,12 @@ public:
     Rect shipBox(std::size_t index) const;
     Rect allButton() const;
     Rect closeButton() const;
+    // Colonize Planet, under Close, for a fleet with a colony ship at a star
+    // with a planet to settle; empty otherwise.
+    std::optional<Rect> colonizeButton() const;
 
     // The mouse: a box changes whether its ship is chosen, All chooses
-    // them all, Close closes.
+    // them all, Close closes, Colonize Planet asks where to land.
     void press(int x, int y);
     Action release(int x, int y);
     void hover(int x, int y) { hoverX_ = x, hoverY_ = y; }
@@ -62,7 +66,8 @@ private:
     std::vector<Image> pictures_; // of each ship, for its banner
     std::string title_, status_;
     std::vector<std::string> strings_; // HESTRNGS.LBX
-    Image top_, grid_, foot_, box_, all_, close_;
+    Image top_, grid_, foot_, box_, all_, close_, colonize_;
+    bool canColonize_ = false;
     Image shipColours_;
     FontSet fonts_;
     Rect held_{};

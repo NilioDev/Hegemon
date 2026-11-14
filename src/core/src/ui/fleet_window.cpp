@@ -16,7 +16,7 @@ namespace {
 // fleet needs), the piece with All and the status, and the buttons.
 constexpr const char* kArchive = "BUFFER0.LBX";
 constexpr std::size_t kTopEntry = 52, kGridEntry = 54, kFootEntry = 56, kChosenEntry = 11, kAllEntry = 60,
-                      kCloseEntry = 72;
+                      kCloseEntry = 72, kColonizeEntry = 69;
 constexpr int kLeft = 22, kTop = 22;
 constexpr int kGridTop = 57, kRowHeight = 56, kMaxRows = 3, kColumns = 3;
 // A ship's box: its top left corner, the step to the next, its size; the
@@ -93,6 +93,7 @@ FleetWindow::FleetWindow(GameData& data, const Game& game, const Fleet& fleet, s
       box_(Image::parse(data.archive(kArchive).entry(kChosenEntry))),
       all_(Image::parse(data.archive(kArchive).entry(kAllEntry))),
       close_(Image::parse(data.archive(kArchive).entry(kCloseEntry))),
+      colonize_(Image::parse(data.archive(kArchive).entry(kColonizeEntry))),
       shipColours_(Image::parse(data.archive("SHIPS.LBX").entry(std::min<std::size_t>(banner, 7) * kShipsPerBanner + kShipColours))),
       fonts_(FontSet::parse(data.archive("FONTS.LBX").entry(0))) {
     strings_ = parseStringList(data.archive("HESTRNGS.LBX").entry(0));
@@ -118,6 +119,14 @@ FleetWindow::FleetWindow(GameData& data, const Game& game, const Fleet& fleet, s
 }
 
 void FleetWindow::describe(const Game& game, const Fleet& fleet) {
+    canColonize_ = false;
+    if (fleet.destination < 0 && fleet.star >= 0 && !colonySites(game, fleet.star).empty()) {
+        for (const std::size_t i : fleet.ships) {
+            if (game.ships.at(i).kind == ShipKind::ColonyShip) {
+                canColonize_ = true;
+            }
+        }
+    }
     if (fleet.destination >= 0 && !fleet.ships.empty()) {
         const Star& to = game.galaxy.stars.at(static_cast<std::size_t>(fleet.destination));
         const int speed = std::max(1, game.ships.at(fleet.ships.front()).speed);
@@ -164,7 +173,10 @@ int FleetWindow::rows() const {
 
 int FleetWindow::bottom() const { return kGridTop + rows() * kRowHeight; }
 
-Rect FleetWindow::area() const { return {kLeft, kTop, top_.width(), bottom() + kFootHeight + close_.height() - kTop}; }
+Rect FleetWindow::area() const {
+    const int buttons = close_.height() + (canColonize_ ? colonize_.height() : 0);
+    return {kLeft, kTop, top_.width(), bottom() + kFootHeight + buttons - kTop};
+}
 
 Rect FleetWindow::shipBox(std::size_t index) const {
     const int i = static_cast<int>(index);
@@ -175,9 +187,17 @@ Rect FleetWindow::allButton() const { return {kLeft + kAllDx, bottom() + kAllDy,
 
 Rect FleetWindow::closeButton() const { return {kButtonX, bottom() + kFootHeight, close_.width(), close_.height()}; }
 
+std::optional<Rect> FleetWindow::colonizeButton() const {
+    if (!canColonize_) {
+        return std::nullopt;
+    }
+    const Rect close = closeButton();
+    return Rect{kButtonX, close.y + close.h, colonize_.width(), colonize_.height()};
+}
+
 void FleetWindow::press(int x, int y) {
     held_ = {};
-    for (const Rect r : {allButton(), closeButton()}) {
+    for (const Rect r : {allButton(), closeButton(), colonizeButton().value_or(Rect{})}) {
         if (r.contains(x, y)) {
             held_ = r;
         }
@@ -197,6 +217,9 @@ FleetWindow::Action FleetWindow::release(int x, int y) {
     }
     if (closeButton().contains(x, y)) {
         return Action::Close;
+    }
+    if (const auto colonize = colonizeButton(); colonize && colonize->contains(x, y)) {
+        return Action::Colonize;
     }
     if (allButton().contains(x, y)) {
         chosen_.assign(ships_.size(), true);
@@ -237,6 +260,9 @@ void FleetWindow::draw(Canvas& canvas, Palette& palette) const {
     all_.draw(all.contains(hoverX_, hoverY_) ? 1 : 0, canvas, all.x, all.y);
     const Rect close = closeButton();
     close_.draw(close.contains(hoverX_, hoverY_) ? 1 : 0, canvas, close.x, close.y);
+    if (const auto colonize = colonizeButton()) {
+        colonize_.draw(colonize->contains(hoverX_, hoverY_) ? 1 : 0, canvas, colonize->x, colonize->y);
+    }
 
     TextStyle title;
     title.shades[1] = kTitleShade1;

@@ -48,7 +48,11 @@ gamepad, mouse, keyboard and touch controls.
 > in the original, and the stars they reach are named on the map. Ships
 > reaching a star for the first time show you its system, and a click on a
 > star shows its system: the star, its planets turning on their orbits,
-> gas giants, asteroid belts and wormholes. Esc on
+> gas giants, asteroid belts and wormholes. A colony ship reaching a star,
+> or Colonize Planet in its fleet's window, asks which planet to settle,
+> shows what the colony would make there, and after Yes lands the ship as
+> in the original: the new colony gets its first person, you may name the
+> star, and the colony screen opens to choose what it builds. Esc on
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
@@ -113,6 +117,9 @@ what is missing.
 | Close the fleet window | Close | Esc | B |
 | Look at a star system | Click the star | Space on the star | A on the star |
 | Close the star system | Close | Esc, Enter or Space | A or B |
+| Colonize a planet | Colonize Planet, then click the planet | Enter or Space picks the first planet | A picks the first planet |
+| Answer the colonize question | Yes or No | Enter or Y, Esc or N | A or B |
+| Skip the landing | Click | Enter, Space or Esc | A or B |
 | Leave the galaxy map (for now) | | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |

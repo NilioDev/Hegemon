@@ -20,6 +20,7 @@ add_executable(hgm_tests
     test_research_done.cpp
     test_research_select.cpp
     test_ship_design.cpp
+    test_colonize.cpp
     test_colony_screen.cpp
     test_build_list.cpp
     test_buy.cpp
