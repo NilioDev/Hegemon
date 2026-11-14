@@ -25,7 +25,8 @@ games and from the build list and design screens.
 
 ## Cost
 
-The sum of, rounded down at the end (fits all 252 designs):
+The sum of, rounded down at the end (fits all 231 designs of games made
+with the fan patch's default costs):
 
 - The hull's cost (hull table) and the computer's for the hull size
   (computer table); the shield's and the drive's for the hull size; the
