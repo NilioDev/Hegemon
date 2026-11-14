@@ -92,6 +92,47 @@ constexpr std::array<std::size_t, 5> kMineralMessages = {546, 423, 0, 450, 547};
 constexpr std::size_t kLowGravityMessage = 361, kHeavyGravityMessage = 603;
 constexpr std::size_t kLastMessage = 723;
 
+// The landscape's buildings: BLDG0.LBX to BLDG4.LBX, 360 entries each
+// (BLDG4 324), counted on from one file to the next: 36 places for each
+// picture, the pictures in the order of the fan patch's building table.
+// Place 0 is at the front, 35 at the back. Roads are COLROADS.LBX entries.
+constexpr std::size_t kPlaces = 36, kPicturesPerFile = 10;
+constexpr int kCapitolPicture = 8, kMarinesPicture = 21;
+// Pictures of no building the colony has, drawn as part of the layout.
+constexpr int kDomes = 2, kModules = 13;
+// Measured: colours 240 and 241 are shadow.
+constexpr std::uint8_t kShadow = 240, kShadow2 = 241;
+struct Placed {
+    int picture;
+    int place;
+};
+struct Layout {
+    std::vector<Placed> pieces;
+    std::vector<int> roads;
+};
+// Measured on 39 new games: with a capitol one of four layouts, about as
+// often each; without one (Unification) three were seen.
+const std::array<Layout, ColonyScreen::kLayouts> kCapitolLayouts = {{
+    {{{kCapitolPicture, 10}, {kMarinesPicture, 7}, {kModules, 17}, {kModules, 26}, {kModules, 28}}, {16, 25, 28, 31, 32, 50, 72}},
+    {{{kDomes, 1}, {kCapitolPicture, 15}, {kModules, 0}, {kModules, 20}, {kMarinesPicture, 28}},
+     {6, 20, 26, 34, 42, 43, 49, 50, 66, 67, 74}},
+    {{{kDomes, 6}, {kCapitolPicture, 10}, {kModules, 0}, {kModules, 35}, {kMarinesPicture, 33}},
+     {0, 5, 6, 23, 37, 43, 48, 50, 51, 61, 62, 78}},
+    {{{kDomes, 24}, {kCapitolPicture, 10}, {kModules, 0}, {kModules, 25}, {kMarinesPicture, 14}},
+     {0, 6, 7, 10, 13, 20, 43, 46, 51, 53, 54, 58, 59}},
+}};
+const std::array<Layout, 3> kUnifiedLayouts = {{
+    {{{kModules, 0}, {kModules, 18}, {kModules, 28}, {kMarinesPicture, 7}}, {0, 25, 33, 34, 39, 74}},
+    {{{kDomes, 0}, {kModules, 10}, {kModules, 14}, {kMarinesPicture, 6}}, {7, 13, 14, 42, 51, 59, 78, 79}},
+    {{{kDomes, 28}, {kModules, 0}, {kModules, 14}, {kMarinesPicture, 15}}, {14, 20, 28, 42, 59, 66}},
+}};
+
+Image buildingPicture(GameData& data, int picture, int place) {
+    const std::size_t at = static_cast<std::size_t>(picture) * kPlaces + static_cast<std::size_t>(place);
+    const std::string file = "BLDG" + std::to_string(at / (kPlaces * kPicturesPerFile)) + ".LBX";
+    return Image::parse(data.archive(file).entry(at % (kPlaces * kPicturesPerFile)));
+}
+
 TextStyle listStyle(bool shown) {
     TextStyle style;
     style.shades[1] = shown ? kShownShade1 : kShade1;
@@ -127,6 +168,21 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
         people_[j] = Image::parse(data.archive(kPeopleArchive).entry(race * kPeoplePerRace + kPersonEntry[j]));
     }
     jobs_ = c.jobs;
+    const bool capitol = c.has("capitol");
+    const auto layoutIndex = static_cast<std::size_t>(std::max(0, c.layout));
+    const Layout& layout = capitol ? kCapitolLayouts[layoutIndex % kCapitolLayouts.size()]
+                                   : kUnifiedLayouts[layoutIndex % kUnifiedLayouts.size()];
+    for (const int road : layout.roads) {
+        roads_.push_back(Image::parse(data.archive("COLROADS.LBX").entry(static_cast<std::size_t>(road))));
+    }
+    std::vector<Placed> placed = layout.pieces;
+    std::sort(placed.begin(), placed.end(), [](const Placed& a, const Placed& b) { return a.place > b.place; });
+    for (const Placed& p : placed) {
+        if (p.picture == kMarinesPicture && !c.has("marine_barracks")) {
+            continue;
+        }
+        pieces_.push_back({p.place, buildingPicture(data, p.picture, p.place)});
+    }
     government_ = std::clamp(static_cast<int>(player.picks[RacePicks::Government]), 0, kIcons - 1 - kGovernmentIcon);
 
     // Measured over the thirteen races' home colonies; see
@@ -169,6 +225,34 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
         throw FormatError("FONTS.LBX: the colony screen's colours are missing");
     }
     base_.set(0, colours.subspan(0, 1024));
+    {
+        // Measured: a building's shadow (colours 240 and 241) darkens what is under
+        // it to the colour nearest half as bright, counted in the palette's
+        // six bits a channel; the lowest index wins a tie.
+        Palette p = base_;
+        sky_.applyPalette(p);
+        landscape_.applyPalette(p);
+        frame_.applyPalette(p);
+        const auto six = [&](std::size_t i, int channel) {
+            const Color& col = p.colors[i];
+            const int v = channel == 0 ? col.r : channel == 1 ? col.g : col.b;
+            return (v * 63 + 127) / 255;
+        };
+        for (std::size_t i = 0; i < 256; ++i) {
+            int best = -1;
+            for (std::size_t j = 0; j < 256; ++j) {
+                int d = 0;
+                for (int ch = 0; ch < 3; ++ch) {
+                    const int e = six(j, ch) - six(i, ch) / 2;
+                    d += e * e;
+                }
+                if (best < 0 || d < best) {
+                    best = d;
+                    shade_[i] = static_cast<std::uint8_t>(j);
+                }
+            }
+        }
+    }
 
     const auto strings = parseStringList(data.archive("HESTRNGS.LBX").entry(0));
     if (strings.size() <= kPrimeText) {
@@ -184,6 +268,19 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
     population_ = formatMessage(messages[kPopulationMessage],
                                 {static_cast<long long>(c.population()), static_cast<long long>(c.growth),
                                  static_cast<long long>(economy.growth(player, planet, c.population()))});
+
+    // The sky shows where the landscape leaves it; the buildings don't
+    // change while the screen is open, so the scene is drawn once.
+    sky_.draw(0, scene_);
+    landscape_.draw(0, scene_);
+    for (const Image& road : roads_) {
+        drawShaded(road, scene_);
+    }
+    for (const Piece& piece : pieces_) {
+        drawShaded(piece.picture, scene_);
+    }
+    roads_.clear();
+    pieces_.clear();
 }
 
 void ColonyScreen::planetList(GameData& data, const Game& game, const Economy& economy, const Colony& shown,
@@ -282,14 +379,29 @@ bool ColonyScreen::release(int x, int y) {
     return done;
 }
 
+void ColonyScreen::drawShaded(const Image& picture, Canvas& canvas) const {
+    const Canvas under = canvas;
+    picture.draw(0, canvas);
+    for (int y = 0; y < canvas.height(); ++y) {
+        for (int x = 0; x < canvas.width(); ++x) {
+            const std::uint8_t v = canvas.at(x, y);
+            if ((v == kShadow || v == kShadow2) && v != under.at(x, y)) {
+                canvas.set(x, y, shade_[under.at(x, y)]);
+            }
+        }
+    }
+}
+
 void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
     palette = base_;
     sky_.applyPalette(palette);
     landscape_.applyPalette(palette);
     frame_.applyPalette(palette);
-    // The sky shows where the landscape leaves it.
-    sky_.draw(0, canvas);
-    landscape_.draw(0, canvas);
+    for (int y = 0; y < canvas.height() && y < scene_.height(); ++y) {
+        for (int x = 0; x < canvas.width() && x < scene_.width(); ++x) {
+            canvas.set(x, y, scene_.at(x, y));
+        }
+    }
     frame_.draw(0, canvas);
 
     const Font& listFont = fonts_.font(kListFont);

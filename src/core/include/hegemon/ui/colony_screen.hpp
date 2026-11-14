@@ -35,6 +35,10 @@ public:
     const std::string& title() const { return title_; }
     const std::string& population() const { return population_; }
 
+    // The ways a home colony's landscape is laid out, as measured: which
+    // building or decoration stands on which of the 36 places, and the roads.
+    static constexpr int kLayouts = 4;
+
     // The rows of icons at the top: money, food, production and research.
     // Each holds COLONY2.LBX entries from the left, kGap for an empty place.
     static constexpr int kGap = -1;
@@ -64,6 +68,8 @@ private:
         Image icon;
         std::array<std::string, 2> lines;
     };
+    // Draws a building or road, darkening what its shadow falls on.
+    void drawShaded(const Image& picture, Canvas& canvas) const;
     void planetList(GameData& data, const Game& game, const Economy& economy, const Colony& shown,
                     const std::vector<std::string>& messages);
 
@@ -77,6 +83,14 @@ private:
     std::array<int, 3> jobs_{};
     int government_ = 0;
     Image arrow_;
+    struct Piece {
+        int place = 0;
+        Image picture;
+    };
+    std::vector<Image> roads_;
+    std::vector<Piece> pieces_; // drawn from the back
+    std::array<std::uint8_t, 256> shade_{}; // each colour in a shadow
+    Canvas scene_{640, 480}; // the sky, the landscape, the roads and buildings
     std::size_t arrowFrame_ = 0;
     PitTimer timer_;
     std::array<Orbit, kOrbits> orbits_;

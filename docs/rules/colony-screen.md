@@ -28,6 +28,45 @@ pointers are this screen's), then the landscape's (0 to 79) and the sky's.
 Measured: the sky, landscape and frame fit the original pixel for pixel
 where nothing is drawn over them (the stars twinkle).
 
+## Buildings and roads
+
+Between the landscape and the frame stand the colony's buildings, joined by
+roads (measured on the home colonies of 39 new games):
+
+- A building's picture is a whole 640 × 480 screen in BLDG0.LBX to
+  BLDG4.LBX, counted on from one file to the next (360 entries a file):
+  36 places for each building, in the order of the fan patch's building
+  table (picture 8 the capitol, 21 the marine barracks). Place 0 is at the
+  front, 35 at the back; Hegemon draws them from the back.
+- Roads are whole screens too, COLROADS.LBX entries, drawn under the
+  buildings.
+- Colours 240 and 241 in either are shadow: what is under them turns to
+  the colour nearest half as bright, counted in the palette's six bits a
+  channel, the lowest index winning a tie (measured on 43 colours).
+- A home colony is laid out in one of four ways, about as often each
+  (11, 7, 10 and 8 of 36 games); Hegemon chooses one at random when the
+  game starts. Each also has pictures 2 (domes) and 13 (modules), which
+  belong to no building the colony has. As place: picture.
+
+  | Layout | Capitol | Marine barracks | Domes | Modules | Roads |
+  | --- | --- | --- | --- | --- | --- |
+  | 1 | 10 | 7 | – | 17, 26, 28 | 16, 25, 28, 31, 32, 50, 72 |
+  | 2 | 15 | 28 | 1 | 0, 20 | 6, 20, 26, 34, 42, 43, 49, 50, 66, 67, 74 |
+  | 3 | 10 | 33 | 6 | 0, 35 | 0, 5, 6, 23, 37, 43, 48, 50, 51, 61, 62, 78 |
+  | 4 | 10 | 14 | 24 | 0, 25 | 0, 6, 7, 10, 13, 20, 43, 46, 51, 53, 54, 58, 59 |
+
+  Without a capitol (Unification) three layouts were seen:
+
+  | Layout | Marine barracks | Domes | Modules | Roads |
+  | --- | --- | --- | --- | --- |
+  | 1 | 7 | – | 0, 18, 28 | 0, 25, 33, 34, 39, 74 |
+  | 2 | 6 | 0 | 10, 14 | 7, 13, 14, 42, 51, 59, 78, 79 |
+  | 3 | 15 | 28 | 0, 14 | 14, 20, 28, 42, 59, 66 |
+
+  Pictures 39 (star base) and 40 (star fortress) are the same as 13. The
+  layout is not in the savegame at a fixed place; how the original picks
+  it, and where it puts buildings built later, is still to be measured.
+
 ## The texts
 
 - The title, ESTRINGS.LBX message 97 ("%sColony of %s", the first blank
@@ -122,7 +161,8 @@ the frame too and do nothing yet.
 ## Still to do
 
 Choosing another planet of the system, the ship at the end of the
-production row, moving people between jobs, the buildings and roads in the
-landscape, the build queue with Change and Buy, Leaders, the ships in the
+production row, moving people between jobs, the people walking, the
+trees and spires, the star base in the sky, buildings built later, the
+build queue with Change and Buy, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the
 mouse does on the screen.
