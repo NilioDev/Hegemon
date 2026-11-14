@@ -370,13 +370,24 @@ void ColonyScreen::tick(std::uint64_t ms) {
 }
 
 void ColonyScreen::press(int x, int y) {
-    held_ = kReturnButton.contains(x, y);
+    held_ = kReturnButton.contains(x, y) ? kReturnButton : kChangeButton.contains(x, y) ? kChangeButton : Rect{};
 }
 
-bool ColonyScreen::release(int x, int y) {
-    const bool done = held_ && kReturnButton.contains(x, y);
-    held_ = false;
-    return done;
+ColonyScreen::Action ColonyScreen::release(int x, int y) {
+    const Rect held = held_;
+    held_ = Rect{};
+    if (!held.contains(x, y)) {
+        return Action::None;
+    }
+    return held.x == kReturnButton.x ? Action::Return : Action::Change;
+}
+
+Palette ColonyScreen::palette() const {
+    Palette p = base_;
+    sky_.applyPalette(p);
+    landscape_.applyPalette(p);
+    frame_.applyPalette(p);
+    return p;
 }
 
 void ColonyScreen::drawShaded(const Image& picture, Canvas& canvas) const {
@@ -393,10 +404,7 @@ void ColonyScreen::drawShaded(const Image& picture, Canvas& canvas) const {
 }
 
 void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
-    palette = base_;
-    sky_.applyPalette(palette);
-    landscape_.applyPalette(palette);
-    frame_.applyPalette(palette);
+    palette = this->palette();
     for (int y = 0; y < canvas.height() && y < scene_.height(); ++y) {
         for (int x = 0; x < canvas.width() && x < scene_.width(); ++x) {
             canvas.set(x, y, scene_.at(x, y));

@@ -10,6 +10,7 @@
 #include "hegemon/rules/tech.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -31,6 +32,10 @@ struct Colony {
     int growth = 0; // thousands of people grown towards the next one
     bool idleShown = false; // the human was shown it with nothing to build
     int layout = 0; // how its landscape is laid out, chosen at random (see ColonyScreen)
+    // What it builds, first at the front: products by the names of
+    // rules/production.hpp and the building table.
+    std::vector<std::string> buildList;
+    static constexpr std::size_t kBuildListLength = 7;
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }
     bool has(std::string_view building) const;

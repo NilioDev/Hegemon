@@ -55,9 +55,11 @@ HGM_TEST("Colony screen: the title, the population and Return") {
     HGM_CHECK(title > 400);
     HGM_CHECK((palette.colors[253] == Color{109, 105, 142}));
     screen.press(600, 470);
-    HGM_CHECK(screen.release(600, 470));
+    HGM_CHECK(screen.release(600, 470) == ColonyScreen::Action::Return);
     screen.press(600, 470);
-    HGM_CHECK(!screen.release(100, 100));
+    HGM_CHECK(screen.release(100, 100) == ColonyScreen::Action::None);
+    screen.press(550, 132);
+    HGM_CHECK(screen.release(551, 133) == ColonyScreen::Action::Change);
 }
 
 HGM_TEST("Colony screen: the icons' places in a row") {

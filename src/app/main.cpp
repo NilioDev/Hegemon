@@ -21,6 +21,7 @@
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/rules/tech.hpp"
+#include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/race_select.hpp"
@@ -66,6 +67,8 @@ struct App {
     std::unique_ptr<hegemon::Random> gameRandom;
     std::unique_ptr<hegemon::ResearchSelectScreen> research; // when the turn ends without a project
     std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map
+    std::size_t colonyIndex = 0;                              // the colony it shows
+    std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -350,6 +353,7 @@ void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
 void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
+    app.buildList.reset();
     app.colony.reset();
     app.research.reset();
     app.map.reset();
@@ -476,6 +480,7 @@ void endTurn(App& app) {
             c.idleShown = true;
             app.colony = std::make_unique<hegemon::ColonyScreen>(
                 *app.data, *app.game, hegemon::Economy(app.data->parameters()), i);
+            app.colonyIndex = i;
             app.pointer->useEntry(hegemon::ColonyScreen::kPointerEntry);
             break;
         }
@@ -487,9 +492,113 @@ void leaveColony(App& app) {
     app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
 }
 
+void openBuildList(App& app) {
+    try {
+        app.buildList = std::make_unique<hegemon::BuildListScreen>(
+            *app.data, *app.game, hegemon::Economy(app.data->parameters()), app.colonyIndex, app.colony->scene(),
+            app.colony->palette());
+        app.buildList->hover(app.pointer->x(), app.pointer->y());
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The build list could not be read: %s", e.what());
+    }
+}
+
+// Leaves the build list; OK keeps what it lists.
+void closeBuildList(App& app, bool keep) {
+    if (keep) {
+        app.game->colonies.at(app.colonyIndex).buildList = app.buildList->buildList();
+    }
+    app.buildList.reset();
+}
+
+// The build list: a product clicked goes to the end of the list, a line of
+// the list clicked is deleted; OK (also Enter, or the gamepad's Start)
+// keeps the list, Cancel (Esc, or B) doesn't. The arrow keys or the D-pad
+// move a highlight, Space or A adds or deletes what it is on.
+SDL_AppResult buildListEvent(App& app, SDL_Event* event) {
+    hegemon::BuildListScreen& screen = *app.buildList;
+    using Result = hegemon::BuildListScreen::Result;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        screen.hover(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            screen.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            const Result r = screen.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            if (r != Result::None) {
+                closeBuildList(app, r == Result::Ok);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_ESCAPE:
+            closeBuildList(app, false);
+            break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+            closeBuildList(app, true);
+            break;
+        case SDLK_SPACE:
+            screen.choose();
+            break;
+        case SDLK_UP:
+        case SDLK_DOWN:
+            app.pointer->hide();
+            screen.moveHighlight(0, event->key.key == SDLK_UP ? -1 : 1);
+            break;
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            app.pointer->hide();
+            screen.moveHighlight(event->key.key == SDLK_LEFT ? -1 : 1, 0);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            closeBuildList(app, false);
+            break;
+        case SDL_GAMEPAD_BUTTON_START:
+            closeBuildList(app, true);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            screen.choose();
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            app.pointer->hide();
+            screen.moveHighlight(0, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            app.pointer->hide();
+            screen.moveHighlight(event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? -1 : 1, 0);
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
 // The colony screen: Return (also Esc, Enter, or the gamepad's A or B)
-// goes back to the map.
+// goes back to the map; Change (also C, or the gamepad's X) opens the
+// build list.
 SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
+    if (app.buildList) {
+        return buildListEvent(app, event);
+    }
     switch (event->type) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
         if (event->button.button == SDL_BUTTON_LEFT) {
@@ -497,19 +606,31 @@ SDL_AppResult colonyEvent(App& app, SDL_Event* event) {
         }
         break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        if (event->button.button == SDL_BUTTON_LEFT &&
-            app.colony->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
-            leaveColony(app);
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            switch (app.colony->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+            case hegemon::ColonyScreen::Action::Return:
+                leaveColony(app);
+                break;
+            case hegemon::ColonyScreen::Action::Change:
+                openBuildList(app);
+                break;
+            case hegemon::ColonyScreen::Action::None:
+                break;
+            }
         }
         break;
     case SDL_EVENT_KEY_DOWN:
         if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
             leaveColony(app);
+        } else if (event->key.key == SDLK_C) {
+            openBuildList(app);
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH || event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
             leaveColony(app);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_WEST) {
+            openBuildList(app);
         }
         break;
     default:
@@ -966,7 +1087,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     const Uint64 elapsed = app->lastTicks == 0 ? 0 : now - app->lastTicks;
     app->lastTicks = now;
     if (app->menu) {
-        if (app->colony) {
+        if (app->buildList) {
+            app->buildList->draw(app->canvas, app->palette);
+        } else if (app->colony) {
             app->colony->tick(elapsed);
             app->colony->draw(app->canvas, app->palette);
         } else if (app->research) {

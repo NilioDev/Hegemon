@@ -28,7 +28,10 @@ gamepad, mouse, keyboard and touch controls.
 > home colony is shown with its landscape, buildings and roads, the planets
 > of its system, its rows of money, food, production and research, its
 > government and its people at work, and it grows as in the original.
-> Building and the rest of the colony screen come next; Esc on the galaxy map goes back to the main
+> Change opens its build list, where you put trade goods, housing, ships and
+> spies in the colony's list of up to seven things to build and see what each
+> costs and how many turns it takes; actually building them comes next. Esc on
+> the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
 > light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,
@@ -76,6 +79,10 @@ what is missing.
 | Enter your ruler's name | Accept | Type, Backspace, Enter; Esc goes back | A takes the offered name; B goes back |
 | Choose your banner colour | Click a banner | Enter clicks where the pointer is, Esc goes back | D-pad, then A; B goes back |
 | Name your home star | Accept | Type, Backspace, Enter | A takes the offered name |
+| Leave the colony screen | Return | Esc or Enter | A or B |
+| Open the colony's build list | Change | C | X |
+| Add to the build list, or delete a line of it | Click it | Arrow keys, then Space | D-pad, then A |
+| Leave the build list | OK keeps it, Cancel doesn't | Enter keeps it, Esc doesn't | Start keeps it, B doesn't |
 | Leave the galaxy map (for now) | | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |
