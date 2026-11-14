@@ -10,10 +10,12 @@
 #include "hegemon/rules/empire.hpp"
 #include "hegemon/rules/production.hpp"
 #include "hegemon/ui/pit_timer.hpp"
+#include "hegemon/ui/product_picture.hpp"
 #include "hegemon/ui/rect.hpp"
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -119,6 +121,7 @@ private:
     std::string title_;
     std::string population_;
     std::string product_, turns_, progress_;
+    std::optional<ProductPicture> picture_; // of what is built
     std::string buyQuestion_, buyShort_, buyNotBuyable_, buyThisTurn_, buyNothing_;
     Rect held_{};
 };

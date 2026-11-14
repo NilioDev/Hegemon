@@ -241,8 +241,10 @@ BuildListScreen::BuildListScreen(GameData& data, const Game& game, const Economy
             right_[i] = b.others[i];
         }
     }
+    const int race = game.players.at(static_cast<std::size_t>(colony_.player)).race;
     for (const auto& [product, unused] : names_) {
         costs_.emplace_back(product, productCost(p, product));
+        pictures_.emplace_back(product, ProductPicture(data, product, race));
     }
     const ColonyOutput out = economy.output(game, game.colonies.at(colony));
     production_ = std::max(0, out.production - out.upkeep);
@@ -469,6 +471,13 @@ void BuildListScreen::draw(Canvas& canvas, Palette& palette) const {
     }
 
     if (hovered_) {
+        if (const std::string* product = productAt(*hovered_)) {
+            for (const auto& [key, picture] : pictures_) {
+                if (key == *product) {
+                    picture.draw(canvas, ProductPicture::Box::BuildList, palette);
+                }
+            }
+        }
         listFont.draw(canvas, kInfoX, kInfoNameY, hoverName_, normal);
         queueFont.draw(canvas, kInfoX, kInfoCostY, costText_, normal);
         queueFont.draw(canvas, kInfoX, kInfoTimeY, timeText_, normal);
