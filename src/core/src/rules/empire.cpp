@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hegemon/rules/empire.hpp"
 
+#include "hegemon/rules/fleet.hpp"
 #include "hegemon/rules/production.hpp"
 
 #include "hegemon/config/parameters.hpp"
@@ -390,6 +391,9 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     for (const Colony& c : game.colonies) {
         grown.push_back(economy.growth(game, c));
     }
+    // Measured: ships sent off this turn go a turn's way; those built now
+    // stay at their colony's star (assumed).
+    moveShips(game);
     // What is built is made by the people before they grow (assumed), by
     // index: a colony base adds a colony.
     for (std::size_t i = 0, n = game.colonies.size(); i < n; ++i) {
@@ -479,6 +483,10 @@ Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<Ra
         player.human = i == 0;
         player.money = money;
         player.knowledge = tree.averageStart();
+        player.explored.assign(game.galaxy.stars.size(), false);
+        if (home.star >= 0 && static_cast<std::size_t>(home.star) < game.galaxy.stars.size()) {
+            player.explored[static_cast<std::size_t>(home.star)] = true;
+        }
         if (parts) {
             player.designs = startingDesigns(parameters, *parts, player.knowledge, random);
         }

@@ -25,12 +25,15 @@ From the bottom up:
    the byte after the star's place. Black holes: BUFFER0.LBX entry
    184 + scale (entry 185 measured for a medium galaxy), 34 × 34, an
    animation of 16 frames.
-4. The player's fleets: BUFFER0.LBX entry 208 − scale, the frame of the
-   player's banner (red: 0), its top left corner 5 pixels left of and 1
+4. The player's fleets: BUFFER0.LBX entry 208 − scale, frame 0 for a red
+   banner (its eight frames are all red, an animation; other banners are
+   not measured yet, Hegemon takes the banner's number), its top left corner 5 pixels left of and 1
    above the top right corner of the star's picture on a medium map (measured
    with all three star sizes); 6 left and level on a small map, 6 left and 2
    above on a large one (one star each); the huge map is assumed like the
    large one.
+   Fleets sent off, on their way and their courses: see
+   [fleets.md](fleets.md).
 5. The names of the stars the player knows (at first only their home star),
    in FONTS.LBX font 2 with one pixel between letters, the letters centred
    under the star's middle and their top 14, 11 or 9 pixels below it for a

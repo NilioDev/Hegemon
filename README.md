@@ -41,7 +41,11 @@ gamepad, mouse, keyboard and touch controls.
 > bases, while trade goods earn money and housing speeds up growth,
 > and the colony screen shows what is being built and how far it is. Buy
 > finishes it at once for BC, at the original's price, and a second Buy in
-> the same turn takes the purchase back, as the fan patch allows. Esc on
+> the same turn takes the purchase back, as the fan patch allows. A click
+> on one of your fleets opens its window with its ships, where you choose
+> which go, and a click on a star sends them there: the map shows the course
+> and the turns to go, the ships travel at their drive's speed each turn as
+> in the original, and the stars they reach are named on the map. Esc on
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
@@ -100,6 +104,10 @@ what is missing.
 | Close a message | Close | Enter or Esc | A or B |
 | Add to the build list, or delete a line of it | Click it | Arrow keys, then Space | D-pad, then A |
 | Leave the build list | OK keeps it, Cancel doesn't | Enter keeps it, Esc doesn't | Start keeps it, B doesn't |
+| Open a fleet's window | Click the fleet | Tab (Shift+Tab goes back) | RB (LB goes back) |
+| Choose which ships of the fleet go | Click their boxes, or All | | |
+| Send the fleet to a star | Click the star | Arrow keys to the star, then Space | D-pad to the star, then A |
+| Close the fleet window | Close | Esc | B |
 | Leave the galaxy map (for now) | | Esc | B |
 | Close Hegemon | Quit Game | | |
 | Close the message when there are no game files | | Esc | B |

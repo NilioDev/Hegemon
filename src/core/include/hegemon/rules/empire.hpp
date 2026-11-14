@@ -54,8 +54,11 @@ enum class ShipKind : std::uint8_t { Scout, ColonyShip, OutpostShip, Transport, 
 struct Ship {
     int player = 0;
     ShipKind kind = ShipKind::Scout;
-    int star = 0; // where it is
+    int star = 0;    // where it is, -1 while it travels
     int design = -1; // for a Combat ship: the slot of the design it was built to
+    int destination = -1; // the star it was sent to, -1 for none
+    int x = 0, y = 0;     // its place on the map while it travels
+    int speed = 0;        // parsecs a turn on its way, its fleet's slowest
 };
 
 struct Player {
@@ -76,6 +79,8 @@ struct Player {
     int spies = 0;
     // The designs of ships it can build, in the build list's order.
     std::vector<ShipDesign> designs;
+    // The stars its ships have been to, by the galaxy's numbers.
+    std::vector<bool> explored;
 };
 
 struct Game {
