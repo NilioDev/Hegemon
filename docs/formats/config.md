@@ -84,3 +84,4 @@ To keep damaged files from running away, Hegemon reads files of at most
 | `<name>.lbx = <path>` | Which file replaces an LBX archive |
 | `format version`, `format mod_name` | [../rules/main-menu.md](../rules/main-menu.md) |
 | `stock_race` | [races.md](races.md) |
+| `building`, `tech`, `lander_ship_cost`, `misc_costs`, `prod_format`, `font_color_group`, `/nohousing` | [../rules/colony-screen.md](../rules/colony-screen.md) (the build list) |

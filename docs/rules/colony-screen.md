@@ -155,14 +155,62 @@ on every home colony; where it comes from is still to be found.
 
 ## Buttons
 
-Return covers (552, 457) to (628, 478). Leaders, Change and Buy are in
-the frame too and do nothing yet.
+Return covers (552, 457) to (628, 478) and Change (520, 124) to (579,
+143); Change opens the build list. Leaders and Buy are in the frame too and
+do nothing yet.
+
+## The build list
+
+Change shows the colony's build list over the colony (COLBLDG.LBX; its
+entry 0 is the frame, with a palette of its own). Measured on the
+original:
+
+- Behind the frame the colony's scene is shown in the blue ramp 244 to
+  254. A landscape colour (0 to 79) goes by its brightness in six bits a
+  channel: on even rows 2 red + green + blue, level 2 below 28, 3 below 57,
+  4 below 83, 5 below 116, 6 below 150 and 7 above; odd rows are darker,
+  2 red + 2 green + blue, level 0 below 33, 1 below 66, 2 below 96, 3 below
+  127, 4 below 158, 5 below 190 and 6 above. The sky and the buildings
+  (colours 80 and up) are flat: level 2 on even rows, 0 on odd ones. The
+  boxes of the title, (231, 307) to (432, 327), and of the seven lines,
+  (206, 331 + 20k) to (460, 347 + 20k), are darker still: each colour the
+  one nearest half as bright, as under a building's shadow.
+- On the left, in font 4 with two pixels between letters from (13, 20),
+  19 pixels a row: Trade Goods, Housing and the buildings the colony can
+  build, in the order of the fan patch's prod_format, names alphabetically
+  within an order. On the right from (485, 20): Colony Base (when another
+  planet of the system is free), Freighter Fleet, Colony Ship, Outpost Ship
+  and Transport Ship as their techs are known, the six ship designs on rows
+  6 to 11 and Spy on row 13.
+- Text colours are the fan patch's font_color_group g0: the left list's
+  products are in its "normal" colours (203, 202, 183) until they are in
+  the build list, then in its "queued" ones (187, 186, 184), which the right
+  list, the title, the lines and the box at the top always use. Shades 1 to
+  3 are the dark, base and dim colours; the shadow is black, one pixel to
+  the right, below and both.
+- The title "Build List for %s" (ESTRINGS 210) and the lines in font 3,
+  centred on 332 (x = 332 − width / 2), at 311 and 335 + 20k.
+- A product clicked goes at the end of the list, at most seven lines;
+  ships, spies, housing and trade goods may be there more than once. The
+  line under the pointer reads "delete %s" (ESTRINGS 257) in a frame of
+  colour 239, (207, 332 + 20k) to (458, 347 + 20k); a click deletes it.
+- The box at the top shows what the pointer is on: its name in font 4 at
+  (306, 21), "Cost Here: %d" (242) at (306, 47) and "Build Time: %d" (211)
+  at (306, 60) in font 3, the turns being the cost over the colony's
+  production rounded up. Housing and trade goods show neither.
+- Costs: buildings from the building table, colony, outpost and transport
+  ships from lander_ship_cost, freighters and spies from misc_costs.
+- Buttons: Cancel (COLBLDG 1) at (493, 447), OK (3) at (560, 447), each
+  pressed in its second frame; Refit (4) at (492, 379) and Design (5) at
+  (561, 379) are greyed while there is nothing to refit.
 
 ## Still to do
 
 Choosing another planet of the system, the ship at the end of the
 production row, moving people between jobs, the people walking, the
-trees and spires, the star base in the sky, buildings built later, the
-build queue with Change and Buy, Leaders, the ships in the
+trees and spires, the star base in the sky, buildings built later,
+building what the build list holds, Buy, the build list's picture and
+description in the box at the top, the ship designs, Auto Build, Repeat
+Build, Refit and Design, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the
 mouse does on the screen.

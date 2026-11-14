@@ -12,6 +12,7 @@ add_library(hgm_core STATIC
     src/ui/galaxy_map.cpp
     src/ui/research_select.cpp
     src/ui/colony_screen.cpp
+    src/ui/build_list.cpp
     src/ui/banner_select.cpp
     src/rules/races.cpp
     src/data/lbx.cpp
@@ -26,6 +27,7 @@ add_library(hgm_core STATIC
     src/rules/galaxy_generator.cpp
     src/rules/empire.cpp
     src/rules/tech.cpp
+    src/rules/production.cpp
     src/data/json.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)

@@ -27,6 +27,8 @@ public:
     static constexpr std::size_t kPointerEntry = 2;
     // Measured: the Return button at the bottom right.
     static constexpr Rect kReturnButton = {552, 457, 77, 22};
+    // Measured: Change, which opens the build list.
+    static constexpr Rect kChangeButton = {520, 124, 60, 20};
 
     // Reads the pictures for a colony of the game. Throws FormatError when a
     // file is damaged.
@@ -51,9 +53,16 @@ public:
     // How far apart a row's icons are drawn.
     static int iconStep(std::size_t places);
 
-    // The mouse: true when Return is let go over.
+    // The mouse: what a button let go over does.
+    enum class Action : std::uint8_t { None, Return, Change };
     void press(int x, int y);
-    bool release(int x, int y);
+    Action release(int x, int y);
+
+    // The sky, the landscape and its buildings, without the panels: the
+    // build list shows it behind its own.
+    const Canvas& scene() const { return scene_; }
+    // The colours the scene is drawn in.
+    Palette palette() const;
 
     // Moves the arrow by the colony shown on, by `ms` milliseconds.
     void tick(std::uint64_t ms);
@@ -97,7 +106,7 @@ private:
     FontSet fonts_;
     std::string title_;
     std::string population_;
-    bool held_ = false;
+    Rect held_{};
 };
 
 } // namespace hegemon
