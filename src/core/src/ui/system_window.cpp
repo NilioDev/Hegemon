@@ -227,7 +227,7 @@ void SystemWindow::draw(Canvas& canvas, Palette& palette) const {
     const int x0 = left(), y0 = top();
     frame_.draw(0, canvas, x0, y0);
     for (const int orbit : beltOrbits_) {
-        belt_.draw(static_cast<std::size_t>(orbit), canvas, x0 + kOrbitDx, y0 + kOrbitDy);
+        belt_.draw(std::min(static_cast<std::size_t>(orbit), belt_.frameCount() - 1), canvas, x0 + kOrbitDx, y0 + kOrbitDy);
     }
     for (const Image& ellipse : orbits_) {
         ellipse.draw(0, canvas, x0 + kOrbitDx, y0 + kOrbitDy);
