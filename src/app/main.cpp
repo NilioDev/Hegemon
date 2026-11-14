@@ -26,6 +26,7 @@
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/message_box.hpp"
 #include "hegemon/ui/race_select.hpp"
+#include "hegemon/ui/research_done.hpp"
 #include "hegemon/ui/research_select.hpp"
 #include "hegemon/ui/ruler_name.hpp"
 #include "hegemon/version.hpp"
@@ -67,6 +68,9 @@ struct App {
     std::unique_ptr<hegemon::TechTree> tree;
     std::unique_ptr<hegemon::Random> gameRandom;
     std::unique_ptr<hegemon::ResearchSelectScreen> research; // when the turn ends without a project
+    bool researchEndsTurn = false; // choosing there goes on to end the turn
+    std::unique_ptr<hegemon::ResearchDoneScreen> researchDone; // a field finished, after the turn
+    std::vector<int> learntTechs;                               // still to be shown on it
     std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map
     std::size_t colonyIndex = 0;                              // the colony it shows
     std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
@@ -360,6 +364,8 @@ void backToMainMenu(App& app) {
     app.colony.reset();
     app.message.reset();
     app.research.reset();
+    app.researchDone.reset();
+    app.learntTechs.clear();
     app.map.reset();
     app.game.reset();
     app.generating.reset();
@@ -463,18 +469,54 @@ void acceptHomeName(App& app) {
     SDL_StopTextInput(app.window);
 }
 
+void openResearch(App& app, bool endsTurn) {
+    const hegemon::Player& human = app.game->players.at(0);
+    app.research = std::make_unique<hegemon::ResearchSelectScreen>(*app.data, *app.tree, human.knowledge, human.race,
+                                                                    app.pointer->x(), app.pointer->y());
+    app.researchEndsTurn = endsTurn;
+    app.pointer->useEntry(hegemon::ResearchSelectScreen::kPointerEntry);
+}
+
+void afterTurn(App& app);
+
 // The turn ends: first the human chooses a research project if there is
 // none, as the original asks.
 void endTurn(App& app) {
     hegemon::Player& human = app.game->players.at(0);
     if (human.research == 0) {
-        app.research = std::make_unique<hegemon::ResearchSelectScreen>(*app.data, *app.tree, human.knowledge,
-                                                                        human.race, app.pointer->x(), app.pointer->y());
-        app.pointer->useEntry(hegemon::ResearchSelectScreen::kPointerEntry);
+        openResearch(app, true);
         return;
     }
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
+    app.learntTechs = human.learntTechs;
+    afterTurn(app);
+}
+
+// After the turn: a screen for each application learnt, then Select New
+// Research when the field is done (measured in that order), then the
+// colonies.
+void afterTurn(App& app) {
+    hegemon::Player& human = app.game->players.at(0);
+    app.researchDone.reset();
+    while (!app.learntTechs.empty()) {
+        const int tech = app.learntTechs.front();
+        app.learntTechs.erase(app.learntTechs.begin());
+        try {
+            app.researchDone =
+                std::make_unique<hegemon::ResearchDoneScreen>(*app.data, *app.tree, human.race, human.learntField, tech);
+            app.pointer->useEntry(hegemon::ResearchSelectScreen::kPointerEntry);
+            return;
+        } catch (const std::exception& e) {
+            SDL_Log("research done screen: %s", e.what());
+        }
+    }
+    if (human.research == 0 && human.learntField != 0) {
+        human.learntField = 0;
+        openResearch(app, false);
+        return;
+    }
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
     // Measured: after the first turn the original shows the home colony,
     // which has nothing to build, and not again after the next turn.
     // Assumed until measured further: each colony is shown once.
@@ -753,9 +795,33 @@ void chooseResearch(App& app, int field) {
         human.research = field;
         human.researched = 0;
     }
+    human.researchTech = app.research->chosenTech();
     app.research.reset();
     app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
-    endTurn(app);
+    if (app.researchEndsTurn) {
+        endTurn(app);
+    } else {
+        afterTurn(app);
+    }
+}
+
+// The research done screen goes at a click, a key or a gamepad button
+// (assumed).
+SDL_AppResult researchDoneEvent(App& app, SDL_Event* event) {
+    switch (event->type) {
+    case SDL_EVENT_KEY_DOWN:
+        if (!event->key.repeat) {
+            afterTurn(app);
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        afterTurn(app);
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult researchEvent(App& app, SDL_Event* event) {
@@ -781,6 +847,9 @@ SDL_AppResult researchEvent(App& app, SDL_Event* event) {
             if (const auto field = screen.choose()) {
                 chooseResearch(app, *field);
             }
+        } else if (event->key.key == SDLK_PAGEUP || event->key.key == SDLK_PAGEDOWN) {
+            app.pointer->hide();
+            screen.moveApp(event->key.key == SDLK_PAGEUP ? -1 : 1);
         } else if (event->key.key == SDLK_LEFT || event->key.key == SDLK_UP) {
             app.pointer->hide();
             screen.moveHighlight(event->key.key == SDLK_LEFT ? -1 : -2);
@@ -804,6 +873,12 @@ SDL_AppResult researchEvent(App& app, SDL_Event* event) {
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
             screen.moveHighlight(1);
             break;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+            screen.moveApp(-1);
+            break;
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            screen.moveApp(1);
+            break;
         case SDL_GAMEPAD_BUTTON_SOUTH:
             if (const auto field = screen.choose()) {
                 chooseResearch(app, *field);
@@ -822,6 +897,9 @@ SDL_AppResult researchEvent(App& app, SDL_Event* event) {
 // The galaxy map: the home star's name first, then the Turn button (also
 // Enter, or the gamepad's Start); Esc or B goes back to the main menu.
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
+    if (app.researchDone) {
+        return researchDoneEvent(app, event);
+    }
     if (app.research) {
         return researchEvent(app, event);
     }
@@ -1203,6 +1281,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             if (app->message) {
                 app->message->draw(app->canvas, app->palette);
             }
+        } else if (app->researchDone) {
+            app->researchDone->tick(elapsed);
+            app->researchDone->draw(app->canvas, app->palette);
         } else if (app->research) {
             app->research->tick(elapsed);
             app->research->draw(app->canvas, app->palette);

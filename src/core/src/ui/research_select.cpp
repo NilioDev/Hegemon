@@ -94,6 +94,7 @@ ResearchSelectScreen::ResearchSelectScreen(GameData& data, const TechTree& tree,
         b.cost = std::to_string(f.cost) + " RP";
         for (const int t : f.techs) {
             b.apps.push_back(names.tech(t));
+            b.techs.push_back(t);
         }
     }
     scientist_.draw(0, animation_);
@@ -157,6 +158,23 @@ std::optional<int> ResearchSelectScreen::choose() const {
         return std::nullopt;
     }
     return boxes_[*highlighted_].field;
+}
+
+int ResearchSelectScreen::chosenTech() const {
+    if (!highlighted_ || boxes_[*highlighted_].techs.empty()) {
+        return 0;
+    }
+    const Box& b = boxes_[*highlighted_];
+    return b.techs[app_ && *app_ < b.techs.size() ? *app_ : 0];
+}
+
+void ResearchSelectScreen::moveApp(int step) {
+    if (!highlighted_ || boxes_[*highlighted_].apps.empty()) {
+        return;
+    }
+    const auto n = static_cast<int>(boxes_[*highlighted_].apps.size());
+    const int at = app_ ? static_cast<int>(*app_) : (step > 0 ? -1 : 0);
+    app_ = static_cast<std::size_t>(((at + step) % n + n) % n);
 }
 
 void ResearchSelectScreen::moveHighlight(int step) {

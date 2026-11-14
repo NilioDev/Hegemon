@@ -413,6 +413,8 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     for (std::size_t i = 0; i < game.players.size(); ++i) {
         const EmpireSummary& s = summaries[i];
         Player& player = game.players[i];
+        player.learntField = 0;
+        player.learntTechs.clear();
         player.money = std::max(0, player.money + s.income);
         if (player.research == 0) {
             continue;
@@ -429,14 +431,19 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
         if (!done) {
             continue;
         }
-        // Until the screen that offers the applications: a creative race
-        // gets them all, others the first.
-        std::span<const int> techs = field.techs;
-        if (player.picks[RacePicks::Creative] == 0) {
-            techs = techs.first(std::min<std::size_t>(techs.size(), 1));
+        // A creative race learns all the field's applications, the others
+        // the one chosen (measured: Select New Research takes the one
+        // clicked).
+        std::vector<int> techs(field.techs.begin(), field.techs.end());
+        if (player.picks[RacePicks::Creative] == 0 && !techs.empty()) {
+            const auto chosen = std::find(techs.begin(), techs.end(), player.researchTech);
+            techs = {chosen != techs.end() ? *chosen : techs.front()};
         }
         tree.learn(player.knowledge, field.id, techs);
+        player.learntField = field.id;
+        player.learntTechs = techs;
         player.researched = keep ? std::max(0, player.researched - 2 * field.cost) : 0;
+        player.researchTech = 0;
         player.research = 0;
     }
 }

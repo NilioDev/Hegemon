@@ -54,8 +54,9 @@ A field is learnt for certain once twice its cost is put in;
 its cost on. Assumed until measured: the chance grows evenly from nothing at
 the cost to certain at twice the cost. After a breakthrough the points are
 gone, unless `keep_research_on_breakthrough` is 1: then what is over twice
-the cost is kept. Until the screen that offers the applications is made, a
-creative race learns all of a field's applications and the others its first.
+the cost is kept. A creative race learns all of a field's applications; the
+others learn the one chosen on Select New Research (measured: the
+application row clicked is the one learnt), else the field's first.
 
 ## Select New Research
 
@@ -82,11 +83,48 @@ Measured on the Alkari's screen:
   to 5 below the application's top, then right 7 pixels, with a head 3
   pixels each way. The border and the arrow change between (125, 219, 20)
   and (158, 251, 28); how fast is assumed.
-- A click on a box takes its field, and the turn runs.
+- A click on a box takes its field, and the turn runs. The application the
+  pointer is on is the one learnt, for a race that isn't creative.
+
+**Added in Hegemon:** the arrow keys or the D-pad light the next box, Page
+Up and Page Down or the gamepad's shoulder buttons point at the lit box's
+next application, and Enter or A takes it.
+
+## Research done
+
+When a field is finished at the end of the turn the original shows the
+application learnt, before Select New Research asks for the next field.
+Measured on the Alkari's screen with Reinforced Hull:
+
+- The colours: the scientist's (0 to 148), the application's (149 to 191)
+  and SCIENCE.LBX entry 0's (192 to 255), which the beam and the texts use.
+- Drawn in this order, each a 640 × 480 animation drawn at (0, 0): the
+  race's scientist (as on Select New Research), the beam of light
+  (SCIENCE.LBX entry 2, 13 frames), the application turning
+  (TANM_*nnn*.LBX entry 0, *nnn* the tech's number in three digits, 30
+  frames) and the glass panel (SCIENCE.LBX entry 1, 15 frames). Each frame
+  is drawn over the ones before it.
+- All four move a frame each tick (about 18 a second). Past its last frame
+  the panel starts again at frame 5, the number in its header; the others
+  start again at their first.
+- The name and description come from HELP.LBX entry 0, a text table of 707
+  records of 1403 bytes: record *n* is tech *n*, with its name at the start
+  and its description from byte 103 on. The name is in font 3 at y 45, the
+  description in font 2 from y 59, 13 pixels a line, both centred on x 310,
+  shade 1 in colour 240 and shade 2 in 246.
+- The message is BILLTEXT.LBX entry 6 (entry 11 holds the same), "Your
+  scientists have completed their research in" and the field's name in place
+  of byte 0x89, then "!". It is in font 4 from y 420, 17 pixels a line,
+  centred on x 337, shades 1 to 3 in colours 242, 245 and 244, with a black
+  border a pixel wide all round the letters.
+- Two pixels between letters. Where the lines break is assumed: the
+  description at 180 pixels and the message at 380 (seen: 172 fits and 186
+  doesn't; 371 fits and 390 doesn't).
+- Assumed: a click or any key goes on, and a creative race sees a screen for
+  each application.
 
 ## Still to do
 
-The screen that offers a field's applications after a breakthrough, the
-breakthrough chance, the research screen of the colonies, other
+The breakthrough chance, the research done screen's opening and sounds, the research screen of the colonies, other
 technology levels at the start, the hyper-advanced fields, the computer
 players' research, and the Select New Research screen's sounds.

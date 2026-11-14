@@ -33,3 +33,17 @@ holds about 400 texts, each ending at a zero byte, numbered from 0 in their
 order. Text 242 is "Generating Universe ..." and text 161 is "Placing home
 worlds ...". Hegemon refuses such a list when the record runs past the end
 of the entry. The zeros after the last text don't count as texts.
+
+## Help texts
+
+`HELP.LBX` entry 0 is a text table of 707 records of 1403 bytes. Each record
+has a name at its start and a longer text from byte 103 on, each ending at a
+zero byte; the bytes between them are still to be measured. Record *n*, for
+*n* from 1, is tech *n* (record 56 is Reinforced Hull); record 0 is "No
+Tech". The fan patch has its own copy in `lbx/en`.
+
+## Messages
+
+`BILLTEXT.LBX` has 468 entries, each a text table with one record of 100
+bytes. Byte 0x89 in a text stands for a name filled in when it is shown.
+Entry 6 is the message that a field's research is complete.

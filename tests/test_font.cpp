@@ -143,10 +143,20 @@ HGM_TEST("Text tables: fixed-size records cut at their first zero") {
     HGM_CHECK(table.size() == 2);
     HGM_CHECK(table.at(0) == "ab");
     HGM_CHECK(table.at(1) == "cdef");
+    // A text further into each record.
+    const auto second = hegemon::TextTable::parse(entry, 1);
+    HGM_CHECK(second.at(0) == "b" && second.at(1) == "def");
 
     bool threw = false;
     try {
         (void)hegemon::TextTable::parse(std::vector<std::uint8_t>{3, 0, 4, 0, 'a', 'b', 'c', 'd'});
+    } catch (const FormatError&) {
+        threw = true;
+    }
+    HGM_CHECK(threw);
+    threw = false;
+    try {
+        (void)hegemon::TextTable::parse(entry, 4);
     } catch (const FormatError&) {
         threw = true;
     }

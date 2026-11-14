@@ -16,8 +16,10 @@ namespace hegemon {
 
 class TextTable {
 public:
-    // Throws FormatError when the records run past the end of the entry.
-    static TextTable parse(std::span<const std::uint8_t> entry);
+    // Takes each record's text from byte `offset` of the record on (the help
+    // texts keep a second text further in). Throws FormatError when the
+    // records run past the end of the entry or are not longer than `offset`.
+    static TextTable parse(std::span<const std::uint8_t> entry, std::size_t offset = 0);
 
     std::size_t size() const { return records_.size(); }
     // Record `i` up to its first zero byte.

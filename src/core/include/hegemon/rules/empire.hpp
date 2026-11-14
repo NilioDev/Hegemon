@@ -63,6 +63,11 @@ struct Player {
     Knowledge knowledge;
     int research = 0;   // the field being researched, 0 for none
     int researched = 0; // research points put into it so far
+    int researchTech = 0; // the application chosen in it, 0 for its first
+    // The field learnt at the end of the last turn and its applications
+    // learnt, for the screen that tells of it; 0 and empty otherwise.
+    int learntField = 0;
+    std::vector<int> learntTechs;
     int freighterFleets = 0;
     int spies = 0;
 };
