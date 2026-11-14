@@ -63,6 +63,10 @@ public:
     const std::string& hoverName() const { return hoverName_; }
     const std::string& costText() const { return costText_; }
     const std::string& timeText() const { return timeText_; }
+    // "Maint. Cost" for a building or colony base, and the description
+    // below, broken into its lines (empty for housing and trade goods).
+    const std::string& maintenanceText() const { return maintenanceText_; }
+    const std::vector<std::vector<std::string>>& description() const { return description_; }
 
     // The mouse.
     void hover(int x, int y);
@@ -95,11 +99,14 @@ private:
     std::vector<std::pair<std::string, std::string>> names_; // product, name
     std::vector<std::pair<std::string, int>> costs_;
     std::vector<std::pair<std::string, ProductPicture>> pictures_;
+    std::vector<std::pair<std::string, std::string>> descriptions_; // product, text
+    std::vector<std::pair<std::string, int>> maintenance_;          // buildings and the colony base
     std::string title_;
-    std::string deleteFormat_, costFormat_, timeFormat_;
+    std::string deleteFormat_, costFormat_, timeFormat_, maintenanceFormat_;
     int production_ = 0;
     std::optional<Slot> hovered_;
-    std::string hoverName_, costText_, timeText_;
+    std::string hoverName_, costText_, timeText_, maintenanceText_;
+    std::vector<std::vector<std::string>> description_; // lines of words
     std::optional<Slot> held_;
     int heldButton_ = -1; // 0 Cancel, 1 OK
     // Colours of the text (font_color_group g0): for a product not in the

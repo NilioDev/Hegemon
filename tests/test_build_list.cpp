@@ -108,8 +108,24 @@ HGM_TEST("Build list: the lists, the box at the top and the build list") {
     screen.hover(500, 272);
     HGM_CHECK(screen.hoverName() == "Spy" && screen.costText() == "Cost Here: 100");
     HGM_CHECK(screen.timeText() == "Build Time: " + std::to_string((100 + production - 1) / production));
+    // Measured: the description's lines as the original breaks them.
+    const auto& spy = screen.description();
+    HGM_CHECK(spy.size() == 6 && screen.maintenanceText().empty());
+    HGM_CHECK(spy.size() == 6 && (spy[0] == List{"Asset", "that", "you", "can", "either", "use", "as"}) &&
+              (spy[5] == List{"per", "turn."}));
+    {
+        Canvas canvas(640, 480);
+        Palette palette;
+        screen.draw(canvas, palette);
+        // "as" ends the first line at the box's right side (x 443).
+        HGM_CHECK(count(canvas, 186, {443, 119, 14, 13}) + count(canvas, 187, {443, 119, 14, 13}) > 20);
+    }
+    screen.hover(500, 25);
+    HGM_CHECK(screen.hoverName() == "Colony Base" && screen.maintenanceText() == "Maint. Cost: 0");
+    HGM_CHECK(screen.description().size() == 3);
     screen.hover(40, 44);
     HGM_CHECK(screen.hoverName() == "Housing" && screen.costText().empty());
+    HGM_CHECK(screen.description().empty() && screen.maintenanceText().empty());
     screen.hover(300, 200);
     HGM_CHECK(screen.hoverName().empty());
 

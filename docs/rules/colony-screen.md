@@ -279,7 +279,23 @@ original:
 - The box at the top shows what the pointer is on: its name in font 4 at
   (306, 21), "Cost Here: %d" (242) at (306, 47) and "Build Time: %d" (211)
   at (306, 60) in font 3, the turns being the cost over the colony's
-  production rounded up. Housing and trade goods show neither.
+  production rounded up. Housing and trade goods show neither. For a
+  building or the colony base "Maint. Cost: %d" (367), its maintenance from
+  the building table, comes at (306, 60) and the build time a line lower,
+  at 73.
+- The box below holds the product's description: the help text of its tech
+  (HELP.LBX entry 0, from byte 103 of the tech's record; see
+  [text.md](../formats/text.md)). The ships, freighters and the colony base
+  have their own techs, the transport ship "transport" and the spy
+  "spy_network"; a building its tech_id (assumed: no building could be
+  built in the game measured). In font 3, one pixel between
+  letters, in the same colours and shadow, from (209, 119), 15 pixels a
+  line. Words go on a line while it is at most 249 pixels wide counting 3
+  pixels between words (seen: 249 fits, 253 doesn't); every line but the
+  last is then spread to 248 pixels by widening the gaps evenly, the
+  leftmost a pixel more where it doesn't share out (measured on Spy, Colony
+  Base, Freighter Fleet and Outpost Ship). Housing and trade goods have
+  none; the ship designs show their details instead, still to come.
 - Costs: buildings from the building table, colony, outpost and transport
   ships from lander_ship_cost, freighters and spies from misc_costs.
 - Buttons: Cancel (COLBLDG 1) at (493, 447), OK (3) at (560, 447), each
@@ -291,8 +307,8 @@ original:
 Choosing another planet of the system, the ship at the end of the
 production row, moving people between jobs, the people walking, the
 trees and spires, the star base in the sky, buildings built later,
-building what the build list holds, the build list's picture and
-description in the box at the top, the ship designs, Auto Build, Repeat
+building what the build list holds, the ship designs and their
+details in the build list, Auto Build, Repeat
 Build, Refit and Design, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the
 mouse does on the screen.

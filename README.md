@@ -34,7 +34,7 @@ gamepad, mouse, keyboard and touch controls.
 > government and its people at work, and it grows as in the original.
 > Change opens its build list, where you put trade goods, housing, ships and
 > spies in the colony's list of up to seven things to build and see what each
-> costs and how many turns it takes, with the original's picture of each. Each turn the colony builds the first of
+> costs and how many turns it takes, with the original's picture and description of each. Each turn the colony builds the first of
 > the list: buildings, colony, outpost and transport ships, freighters, spies
 > and colony bases, while trade goods earn money and housing speeds up growth,
 > and the colony screen shows what is being built and how far it is. Buy
