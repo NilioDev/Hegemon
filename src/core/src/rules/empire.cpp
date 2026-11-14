@@ -102,7 +102,7 @@ int Economy::eaten2(const Player& player, int population) const {
     return player.picks[RacePicks::Cybernetic] != 0 ? population : 2 * population;
 }
 
-int Economy::production(const Player& player, const Planet& planet, int workers) const {
+int Economy::production(const Player& player, const Planet& planet, int workers, int* pollution) const {
     const int perWorker =
         static_cast<int>(p_.integer("production_worker_base", {}, kMineralNames[static_cast<std::size_t>(planet.minerals)])) +
         pickValue(player.picks, RacePicks::Industry, "industry");
@@ -116,7 +116,11 @@ int Economy::production(const Player& player, const Planet& planet, int workers)
         const int exempt =
             static_cast<int>(p_.integer("planet_no_pollution_prod", {}, kSizeNames[static_cast<std::size_t>(planet.size)]));
         if (made > exempt) {
-            made -= (made - exempt + 1) / 2;
+            const int lost = (made - exempt + 1) / 2;
+            made -= lost;
+            if (pollution != nullptr) {
+                *pollution = lost;
+            }
         }
     }
     return made;
@@ -204,9 +208,11 @@ ColonyOutput Economy::output(const Game& game, const Colony& colony) const {
     const int population = colony.population();
     out.food2 = foodTotal2(player, planet, colony.jobs[static_cast<std::size_t>(Job::Farmer)]);
     out.eaten2 = eaten2(player, population);
-    out.production = production(player, planet, colony.jobs[static_cast<std::size_t>(Job::Worker)]);
+    out.production = production(player, planet, colony.jobs[static_cast<std::size_t>(Job::Worker)], &out.pollution);
     out.upkeep = player.picks[RacePicks::Cybernetic] != 0 ? population / 2 : 0;
-    out.research = colony.jobs[static_cast<std::size_t>(Job::Scientist)] * scientistResearch100(player, planet) / 100;
+    // Rounded to the nearest point (measured: three Elerian scientists under
+    // feudalism, 4.5, make 5).
+    out.research = (colony.jobs[static_cast<std::size_t>(Job::Scientist)] * scientistResearch100(player, planet) + 50) / 100;
 
     int taxEach2 = kTax2 + pickValue(player.picks, RacePicks::Money, "money");
     int tax2 = population * taxEach2;
@@ -221,6 +227,7 @@ ColonyOutput Economy::output(const Game& game, const Colony& colony) const {
     for (const auto& b : colony.buildings) {
         upkeep2 += 2 * static_cast<int>(p_.integer("building", {b}, "maintenance"));
     }
+    out.maintenance2 = upkeep2;
     out.income2 = tax2 + trade2 - upkeep2;
     return out;
 }

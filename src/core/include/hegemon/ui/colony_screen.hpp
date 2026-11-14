@@ -10,7 +10,9 @@
 #include "hegemon/rules/empire.hpp"
 #include "hegemon/ui/rect.hpp"
 
+#include <array>
 #include <string>
+#include <vector>
 
 namespace hegemon {
 
@@ -31,6 +33,14 @@ public:
     const std::string& title() const { return title_; }
     const std::string& population() const { return population_; }
 
+    // The rows of icons at the top: money, food, production and research.
+    // Each holds COLONY2.LBX entries from the left, kGap for an empty place.
+    static constexpr int kGap = -1;
+    enum Row : std::size_t { Money, Food, Production, Research, kRows };
+    const std::vector<int>& row(Row r) const { return rows_.at(r); }
+    // How far apart a row's icons are drawn.
+    static int iconStep(std::size_t places);
+
     // The mouse: true when Return is let go over.
     void press(int x, int y);
     bool release(int x, int y);
@@ -43,6 +53,11 @@ private:
     Image sky_;
     Image landscape_;
     Image frame_;
+    std::vector<Image> icons_; // COLONY2.LBX entries 0 to 26
+    std::array<Image, 3> people_; // a farmer, a worker and a scientist
+    std::array<std::vector<int>, kRows> rows_;
+    std::array<int, 3> jobs_{};
+    int government_ = 0;
     FontSet fonts_;
     std::string title_;
     std::string population_;

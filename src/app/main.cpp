@@ -464,10 +464,13 @@ void endTurn(App& app) {
     }
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
-    // Measured: with nothing to build the original shows the home colony
-    // after the turn. Hegemon has no building yet, so it always does.
+    // Measured: after the first turn the original shows the home colony,
+    // which has nothing to build, and not again after the next turn.
+    // Hegemon can't build yet, so it shows each colony once.
     for (std::size_t i = 0; i < app.game->colonies.size(); ++i) {
-        if (app.game->colonies[i].player == 0) {
+        hegemon::Colony& c = app.game->colonies[i];
+        if (c.player == 0 && !c.idleShown) {
+            c.idleShown = true;
             app.colony = std::make_unique<hegemon::ColonyScreen>(
                 *app.data, *app.game, hegemon::Economy(app.data->parameters()), i);
             app.pointer->useEntry(hegemon::ColonyScreen::kPointerEntry);

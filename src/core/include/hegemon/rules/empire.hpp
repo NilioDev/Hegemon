@@ -29,6 +29,7 @@ struct Colony {
     std::array<int, kJobs> jobs{}; // how many people do each job
     std::vector<std::string> buildings; // by the names of the fan patch's building table
     int growth = 0; // thousands of people grown towards the next one
+    bool idleShown = false; // the human was shown it with nothing to build
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }
     bool has(std::string_view building) const;
@@ -67,9 +68,11 @@ struct ColonyOutput {
     int food2 = 0;       // grown by the farmers
     int eaten2 = 0;      // what its people eat
     int production = 0;  // usable, after pollution
+    int pollution = 0;   // production lost to pollution
     int upkeep = 0;      // production its people need (cybernetic races)
     int research = 0;
     int income2 = 0;     // taxes and trade goods, less the buildings' upkeep
+    int maintenance2 = 0; // the buildings' upkeep
 };
 
 // What the galaxy map's side panel shows about an empire.
@@ -111,7 +114,7 @@ public:
 private:
     int foodTotal2(const Player& player, const Planet& planet, int farmers) const;
     int eaten2(const Player& player, int population) const;
-    int production(const Player& player, const Planet& planet, int workers) const;
+    int production(const Player& player, const Planet& planet, int workers, int* pollution = nullptr) const;
     int pickValue(const RacePicks& picks, RacePicks::Pick pick, std::string_view name) const;
 
     const Parameters& p_;
