@@ -14,12 +14,18 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace hegemon {
 
 class GameData;
 class Economy;
+
+// The name the original gives a product (rules/production.hpp, or a
+// building of the fan patch's table). Throws FormatError when a file is
+// damaged.
+std::string productName(GameData& data, std::string_view product);
 
 class BuildListScreen {
 public:

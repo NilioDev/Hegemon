@@ -153,6 +153,17 @@ point for the colony (three Elerian scientists under feudalism, 4.5, make
 A small ship stands at the right end of the production row (about 276, 84)
 on every home colony; where it comes from is still to be found.
 
+## What is built
+
+The box at the top right shows the first of the build list, measured: its
+name in font 1 centred on 578 at y 38, "%d turns" (HESTRNGS 226, also for
+one turn) from (531, 103) and "made / cost" ending at 626 in font 0, one
+pixel between letters, shades 245 and 253, a black shadow. The turns are
+what is left over the colony's production a turn, rounded up. With nothing
+to build it reads "1 turns" and "0 / 0". Still to do: the product's
+picture in the box, the bar at its bottom right, and the box's frame,
+which is drawn lighter while something is built.
+
 ## Buttons
 
 Return covers (552, 457) to (628, 478) and Change (520, 124) to (579,

@@ -473,7 +473,7 @@ void endTurn(App& app) {
     updatePanel(app);
     // Measured: after the first turn the original shows the home colony,
     // which has nothing to build, and not again after the next turn.
-    // Hegemon can't build yet, so it shows each colony once.
+    // Assumed until measured further: each colony is shown once.
     for (std::size_t i = 0; i < app.game->colonies.size(); ++i) {
         hegemon::Colony& c = app.game->colonies[i];
         if (c.player == 0 && !c.idleShown) {
@@ -507,6 +507,13 @@ void openBuildList(App& app) {
 void closeBuildList(App& app, bool keep) {
     if (keep) {
         app.game->colonies.at(app.colonyIndex).buildList = app.buildList->buildList();
+        // The colony screen shows what it builds now.
+        try {
+            app.colony = std::make_unique<hegemon::ColonyScreen>(
+                *app.data, *app.game, hegemon::Economy(app.data->parameters()), app.colonyIndex);
+        } catch (const hegemon::FormatError& e) {
+            SDL_Log("The colony screen could not be read: %s", e.what());
+        }
     }
     app.buildList.reset();
 }

@@ -35,13 +35,14 @@ struct Colony {
     // What it builds, first at the front: products by the names of
     // rules/production.hpp and the building table.
     std::vector<std::string> buildList;
+    int produced = 0; // production put into the first of the list so far
     static constexpr std::size_t kBuildListLength = 7;
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }
     bool has(std::string_view building) const;
 };
 
-enum class ShipKind : std::uint8_t { Scout, ColonyShip, OutpostShip };
+enum class ShipKind : std::uint8_t { Scout, ColonyShip, OutpostShip, Transport };
 
 struct Ship {
     int player = 0;
@@ -58,6 +59,8 @@ struct Player {
     Knowledge knowledge;
     int research = 0;   // the field being researched, 0 for none
     int researched = 0; // research points put into it so far
+    int freighterFleets = 0;
+    int spies = 0;
 };
 
 struct Game {
@@ -115,7 +118,10 @@ public:
     // How many of the race's people the planet can hold.
     int maxPopulation(const Player& player, const Planet& planet) const;
     // Thousands of people a colony grows in a turn.
-    int growth(const Player& player, const Planet& planet, int population) const;
+    // `housing` is the production a colony building housing puts into it.
+    int growth(const Player& player, const Planet& planet, int population, int housing = 0) const;
+    // A colony's growth, with its housing.
+    int growth(const Game& game, const Colony& colony) const;
 
 private:
     int foodTotal2(const Player& player, const Planet& planet, int farmers) const;

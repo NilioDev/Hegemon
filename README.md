@@ -30,7 +30,10 @@ gamepad, mouse, keyboard and touch controls.
 > government and its people at work, and it grows as in the original.
 > Change opens its build list, where you put trade goods, housing, ships and
 > spies in the colony's list of up to seven things to build and see what each
-> costs and how many turns it takes; actually building them comes next. Esc on
+> costs and how many turns it takes. Each turn the colony builds the first of
+> the list: buildings, colony, outpost and transport ships, freighters, spies
+> and colony bases, while trade goods earn money and housing speeds up growth,
+> and the colony screen shows what is being built and how far it is. Esc on
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons

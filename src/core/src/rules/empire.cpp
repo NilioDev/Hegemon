@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hegemon/rules/empire.hpp"
 
+#include "hegemon/rules/production.hpp"
+
 #include "hegemon/config/parameters.hpp"
 #include "hegemon/rules/random.hpp"
 
@@ -159,7 +161,7 @@ int Economy::maxPopulation(const Player& player, const Planet& planet) const {
     return most;
 }
 
-int Economy::growth(const Player& player, const Planet& planet, int population) const {
+int Economy::growth(const Player& player, const Planet& planet, int population, int housing) const {
     const int most = maxPopulation(player, planet);
     if (population <= 0 || most <= population) {
         return 0;
@@ -169,9 +171,26 @@ int Economy::growth(const Player& player, const Planet& planet, int population) 
     const std::int64_t factor = p_.integer("growth_formula_factor");
     const auto base = static_cast<int>(
         std::sqrt(static_cast<double>(factor * population * (most - population) / most)));
-    const int bonus = static_cast<int>(p_.integer("growth_rate_bonus", {}, "general_modifier")) +
-                      pickValue(player.picks, RacePicks::Growth, "growth");
+    int bonus = static_cast<int>(p_.integer("growth_rate_bonus", {}, "general_modifier")) +
+                pickValue(player.picks, RacePicks::Growth, "growth");
+    if (housing > 0) {
+        // The fan patch's manual: FACTOR × production ÷ people, as a bonus
+        // in percent.
+        const auto factor2 = static_cast<int>(p_.integer("housing_formula_factor"));
+        bonus += p_.integer("housing_no_popagg") != 0 ? factor2 * housing : factor2 * housing / population;
+    }
     return std::max(0, base * (100 + bonus) / 100);
+}
+
+int Economy::growth(const Game& game, const Colony& colony) const {
+    const Player& player = game.players.at(static_cast<std::size_t>(colony.player));
+    const Planet& planet = game.galaxy.planets.at(static_cast<std::size_t>(colony.planet));
+    int housing = 0;
+    if (!colony.buildList.empty() && colony.buildList.front() == "housing") {
+        const ColonyOutput out = output(game, colony);
+        housing = std::max(0, out.production - out.upkeep);
+    }
+    return growth(player, planet, colony.population(), housing);
 }
 
 std::array<int, kJobs> Economy::startingJobs(const Player& player, const Planet& planet, int population) const {
@@ -219,10 +238,14 @@ ColonyOutput Economy::output(const Game& game, const Colony& colony) const {
     if (government(player) == kDemocracy) {
         tax2 = tax2 * (100 + static_cast<int>(p_.integer("govt_bonus", {}, "democracy_money")) * kGovernmentStep) / 100;
     }
-    // Nothing is being built yet: what's made goes to trade goods.
-    const int ratio = static_cast<int>(p_.integer(
-        "trade_goods_ratio", {}, player.picks[RacePicks::FantasticTraders] != 0 ? "fantastic_traders" : "normal"));
-    const int trade2 = std::max(0, out.production - out.upkeep) * 2 * ratio / 100;
+    // Measured: with nothing to build, or trade goods first in the build
+    // list, what's made goes to trade goods.
+    int trade2 = 0;
+    if (colony.buildList.empty() || colony.buildList.front() == "trade_goods") {
+        const int ratio = static_cast<int>(p_.integer(
+            "trade_goods_ratio", {}, player.picks[RacePicks::FantasticTraders] != 0 ? "fantastic_traders" : "normal"));
+        trade2 = std::max(0, out.production - out.upkeep) * 2 * ratio / 100;
+    }
     int upkeep2 = 0;
     for (const auto& b : colony.buildings) {
         upkeep2 += 2 * static_cast<int>(p_.integer("building", {b}, "maintenance"));
@@ -289,6 +312,65 @@ std::string planetName(const Galaxy& galaxy, int planet, const std::string& prim
     return star + " " + std::string(kRoman[static_cast<std::size_t>(p.orbit)]);
 }
 
+namespace {
+
+// The colony's production goes into the first of its build list; what it
+// finishes leaves the list (assumed: what is left over is kept for the
+// next).
+void produce(Game& game, const Parameters& parameters, const Economy& economy, Colony& c) {
+    if (c.buildList.empty()) {
+        return;
+    }
+    const std::string product = c.buildList.front();
+    if (product == kTradeGoods || product == kHousing) {
+        return; // they stay until taken out, and their effect is in the income and growth
+    }
+    const ColonyOutput out = economy.output(game, c);
+    c.produced += std::max(0, out.production - out.upkeep);
+    const int cost = productCost(parameters, product);
+    if (c.produced < cost) {
+        return;
+    }
+    c.produced -= cost;
+    c.buildList.erase(c.buildList.begin());
+    Player& player = game.players.at(static_cast<std::size_t>(c.player));
+    const int star = game.galaxy.planets.at(static_cast<std::size_t>(c.planet)).star;
+    if (product == kColonyShip) {
+        game.ships.push_back({c.player, ShipKind::ColonyShip, star});
+    } else if (product == kOutpostShip) {
+        game.ships.push_back({c.player, ShipKind::OutpostShip, star});
+    } else if (product == kTransportShip) {
+        game.ships.push_back({c.player, ShipKind::Transport, star});
+    } else if (product == kFreighters) {
+        ++player.freighterFleets;
+    } else if (product == kSpy) {
+        ++player.spies;
+    } else if (product == kColonyBase) {
+        // A new colony of one on the system's first free planet (assumed).
+        const Star& system = game.galaxy.stars.at(static_cast<std::size_t>(star));
+        for (const int index : system.orbits) {
+            if (index < 0 || static_cast<std::size_t>(index) >= game.galaxy.planets.size()) {
+                continue;
+            }
+            const Planet& planet = game.galaxy.planets[static_cast<std::size_t>(index)];
+            const bool settled = std::any_of(game.colonies.begin(), game.colonies.end(),
+                                             [&](const Colony& o) { return o.planet == index; });
+            if (planet.type == SatelliteType::Planet && !settled) {
+                Colony colony;
+                colony.player = c.player;
+                colony.planet = index;
+                colony.jobs = economy.startingJobs(player, planet, 1);
+                game.colonies.push_back(std::move(colony));
+                break;
+            }
+        }
+    } else {
+        c.buildings.push_back(product);
+    }
+}
+
+} // namespace
+
 void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random) {
     const Economy economy(parameters);
     const bool fixedCost = parameters.integer("fixed_research_cost") != 0;
@@ -300,10 +382,21 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     for (std::size_t i = 0; i < game.players.size(); ++i) {
         summaries.push_back(economy.summary(game, static_cast<int>(i)));
     }
-    for (Colony& c : game.colonies) {
+    // The growth is that of the turn that ends too, with its housing.
+    std::vector<int> grown;
+    for (const Colony& c : game.colonies) {
+        grown.push_back(economy.growth(game, c));
+    }
+    // What is built is made by the people before they grow (assumed), by
+    // index: a colony base adds a colony.
+    for (std::size_t i = 0, n = game.colonies.size(); i < n; ++i) {
+        produce(game, parameters, economy, game.colonies[i]);
+    }
+    for (std::size_t i = 0; i < grown.size(); ++i) {
+        Colony& c = game.colonies[i];
         const Player& player = game.players.at(static_cast<std::size_t>(c.player));
         const Planet& planet = game.galaxy.planets.at(static_cast<std::size_t>(c.planet));
-        c.growth += economy.growth(player, planet, c.population());
+        c.growth += grown[i];
         // Measured: a thousand grown makes a new person. Assumed: who
         // works, and that nothing is kept when the planet is full.
         while (c.growth >= kGrown) {

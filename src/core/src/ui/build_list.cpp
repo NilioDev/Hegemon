@@ -105,6 +105,35 @@ std::array<std::uint8_t, 3> colourGroup(const Parameters& p, std::string_view ro
 
 } // namespace
 
+std::string productName(GameData& data, std::string_view product) {
+    const Parameters& p = data.parameters();
+    const auto messages = parseStringList(data.archive("ESTRINGS.LBX").entry(0));
+    if (messages.size() <= kLastMessage) {
+        throw FormatError("too few messages in ESTRINGS.LBX");
+    }
+    if (product == kTradeGoods) {
+        return messages[kTradeGoodsMessage];
+    }
+    if (product == kHousing) {
+        return messages[kHousingMessage];
+    }
+    if (product == kFreighters) {
+        return messages[kFreightersMessage];
+    }
+    if (product == kTransportShip) {
+        return messages[kTransportMessage];
+    }
+    if (product == kSpy) {
+        return messages[kSpyMessage];
+    }
+    const TechTree tree(p);
+    const TechNames techs(data.archive("TECHNAME.LBX").entry(0), tree);
+    if (product == kColonyShip || product == kOutpostShip || product == kColonyBase) {
+        return techs.tech(static_cast<int>(p.integer("tech", {product}, "id")));
+    }
+    return techs.tech(static_cast<int>(p.integer("building", {product}, "tech_id")));
+}
+
 BuildListScreen::BuildListScreen(GameData& data, const Game& game, const Economy& economy, std::size_t colony,
                                  const Canvas& scene, const Palette& colours)
     : colony_(game.colonies.at(colony)), frame_(Image::parse(data.archive(kArchive).entry(kFrameEntry))),

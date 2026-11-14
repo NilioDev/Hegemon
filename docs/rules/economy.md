@@ -44,8 +44,9 @@ Money is counted in halves too.
 - Taxes: one BC per person, plus the race's money pick (`race_pick
   moneyN_value`, in halves). A Democracy gets `govt_bonus democracy_money`
   × 5 % more taxes.
-- Trade goods: with nothing to build, the production left after the
-  cybernetic upkeep becomes money at `trade_goods_ratio` percent
+- Trade goods: with nothing in the build list, or trade goods first in
+  it (measured: the money row loses three coins when a spy is built
+  instead), the production left after the cybernetic upkeep becomes money at `trade_goods_ratio` percent
   (`fantastic_traders` for such a race).
 - Upkeep: each building's `maintenance` from the `building` table.
 
@@ -76,9 +77,27 @@ their ocean world). Every thousand grown is one more person (measured:
 Pop 8,073 k after the first turn). Assumed:
 the new person works in industry, and the rounding of the bonuses.
 
+With housing first in the build list the bonus grows by
+`housing_formula_factor` × production ÷ people percent (without the
+division with `housing_no_popagg`), as the fan patch's manual says;
+measured: the Alkari's +73k becomes +94k (40 × 6 ÷ 8 = 30 %).
+
+## Building
+
+Each turn the production left after the cybernetic upkeep goes into the
+first of the colony's build list (rules/production.hpp gives the costs).
+When it reaches the cost the product is done and leaves the list: a
+building stands at the colony, a colony, outpost or transport ship waits at
+its star, a freighter fleet or spy joins the empire, and a colony base
+settles the first free planet of the system with one person. Trade goods
+and housing stay first until taken out. Assumed: what is left over goes
+into the next product, and production is made by the people before they
+grow.
+
 ## Still to do
 
-Everything that isn't at a home colony at the start: other buildings,
+Everything that isn't at a home colony at the start: what buildings do,
+Buy, repeat builds, the turn a finished building's upkeep starts,
 gravity, morale, the tax rate, freighters, leaders, the other races and
 techs that change growth, starving, and how computer players arrange their
 colonies.
