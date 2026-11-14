@@ -259,7 +259,7 @@ HGM_TEST("Empire: how many people a planet holds and how fast they grow") {
     HGM_CHECK(g.colonies[0].population() == 9 && g.colonies[0].growth == 63);
 }
 
-HGM_TEST("Empire: planets are named after their star and orbit") {
+HGM_TEST("Empire: planets are named after their star and their order") {
     Galaxy g;
     Star s;
     s.name = "Altair";
@@ -271,4 +271,8 @@ HGM_TEST("Empire: planets are named after their star and orbit") {
     }
     HGM_CHECK(planetName(g, 0, "Prime") == "Altair Prime");
     HGM_CHECK(planetName(g, 2, "Prime") == "Altair III");
+    // Measured: the first planet is Prime whatever orbit it is in.
+    g.planets[0].type = SatelliteType::AsteroidBelt;
+    HGM_CHECK(planetName(g, 1, "Prime") == "Altair Prime");
+    HGM_CHECK(planetName(g, 2, "Prime") == "Altair II");
 }

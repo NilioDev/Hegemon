@@ -308,10 +308,17 @@ std::string planetName(const Galaxy& galaxy, int planet, const std::string& prim
     static constexpr std::array<std::string_view, kOrbits> kRoman = {"I", "II", "III", "IV", "V"};
     const Planet& p = galaxy.planets.at(static_cast<std::size_t>(planet));
     const std::string& star = galaxy.stars.at(static_cast<std::size_t>(p.star)).name;
-    if (p.orbit <= 0 || static_cast<std::size_t>(p.orbit) >= kOrbits) {
+    // Measured: Sal's first planet, in its second orbit, is Sal Prime.
+    std::size_t before = 0;
+    for (const Planet& other : galaxy.planets) {
+        if (other.star == p.star && other.type == SatelliteType::Planet && other.orbit < p.orbit) {
+            ++before;
+        }
+    }
+    if (before == 0 || before >= kOrbits) {
         return star + " " + prime;
     }
-    return star + " " + std::string(kRoman[static_cast<std::size_t>(p.orbit)]);
+    return star + " " + std::string(kRoman[before]);
 }
 
 namespace {

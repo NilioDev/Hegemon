@@ -11,6 +11,7 @@
 
 #include "hegemon/data/image.hpp"
 #include "hegemon/data/reader.hpp"
+#include "hegemon/data/text_table.hpp"
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/ui/banner_select.hpp"
@@ -25,6 +26,7 @@
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/fleet_window.hpp"
+#include "hegemon/ui/system_window.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/message_box.hpp"
 #include "hegemon/ui/race_select.hpp"
@@ -79,6 +81,8 @@ struct App {
     std::unique_ptr<hegemon::MessageBox> message;             // what Buy says, over the colony screen
     hegemon::Purchase purchase;                               // what it offers
     std::unique_ptr<hegemon::FleetWindow> fleetWindow;        // over the map
+    std::unique_ptr<hegemon::SystemWindow> systemWindow;      // a star system, over the map
+    std::vector<int> arrivals; // stars the human's ships first reached this turn, still to be shown
     std::size_t banner0 = 0;                                  // the human's banner colour
     Uint64 dashTime = 0;                                      // for the courses' moving dashes
     std::mt19937 random{std::random_device{}()};
@@ -366,6 +370,8 @@ void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
     app.fleetWindow.reset();
+    app.systemWindow.reset();
+    app.arrivals.clear();
     app.buildList.reset();
     app.colony.reset();
     app.message.reset();
@@ -626,6 +632,91 @@ void openResearch(App& app, bool endsTurn) {
 
 void afterTurn(App& app);
 
+// Shows the next star the human's ships reached this turn, if any.
+bool showArrival(App& app) {
+    while (!app.arrivals.empty()) {
+        const int star = app.arrivals.front();
+        app.arrivals.erase(app.arrivals.begin());
+        try {
+            const auto messages = hegemon::parseStringList(app.data->archive("ESTRINGS.LBX").entry(0));
+            constexpr std::size_t kScoutsArrive = 456;
+            if (messages.size() <= kScoutsArrive) {
+                throw hegemon::FormatError("too few messages in ESTRINGS.LBX");
+            }
+            const auto& name = app.game->galaxy.stars.at(static_cast<std::size_t>(star)).name;
+            app.systemWindow = std::make_unique<hegemon::SystemWindow>(
+                *app.data, *app.game, star, hegemon::SystemWindow::Place::Middle, app.banner0,
+                hegemon::formatMessage(messages[kScoutsArrive], {name}));
+            app.systemWindow->hover(app.pointer->x(), app.pointer->y());
+            return true;
+        } catch (const std::exception& e) {
+            SDL_Log("The star system could not be shown: %s", e.what());
+        }
+    }
+    return false;
+}
+
+// Opens the star system window for a star clicked on the map.
+void openSystem(App& app, int star) {
+    try {
+        app.systemWindow = std::make_unique<hegemon::SystemWindow>(*app.data, *app.game, star,
+                                                                   hegemon::SystemWindow::Place::MapCorner, app.banner0);
+        app.systemWindow->hover(app.pointer->x(), app.pointer->y());
+    } catch (const std::exception& e) {
+        SDL_Log("The star system could not be shown: %s", e.what());
+    }
+}
+
+// Closes the star system window; after the turn the next arrival follows,
+// then the rest of what the turn brings.
+void closeSystem(App& app) {
+    const bool arrival = app.systemWindow && app.systemWindow->place() == hegemon::SystemWindow::Place::Middle;
+    app.systemWindow.reset();
+    if (arrival && !showArrival(app)) {
+        afterTurn(app);
+    }
+}
+
+// The star system window takes every event while it is open: Close, Esc
+// or B closes it.
+bool systemEvent(App& app, SDL_Event* event) {
+    if (!app.systemWindow) {
+        return false;
+    }
+    auto& w = *app.systemWindow;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        w.hover(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            w.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT &&
+            w.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)) ==
+                hegemon::SystemWindow::Action::Close) {
+            closeSystem(app);
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER ||
+            event->key.key == SDLK_SPACE) {
+            closeSystem(app);
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST || event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            closeSystem(app);
+        }
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+
 // The turn ends: first the human chooses a research project if there is
 // none, as the original asks.
 void endTurn(App& app) {
@@ -634,13 +725,33 @@ void endTurn(App& app) {
         openResearch(app, true);
         return;
     }
+    const std::vector<bool> explored = human.explored;
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
     updateFleets(app);
-    // The window shows the fleet as it was; the original closes it (assumed).
-    app.fleetWindow.reset();
+    // Measured: the fleet window stays open, showing the fleet where it is
+    // now.
+    if (app.fleetWindow && !app.fleetWindow->ships().empty()) {
+        const std::size_t first = app.fleetWindow->ships().front();
+        for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
+            if (std::find(f.ships.begin(), f.ships.end(), first) != f.ships.end()) {
+                openFleet(app, f);
+                break;
+            }
+        }
+    }
     app.learntTechs = human.learntTechs;
-    afterTurn(app);
+    // Measured: a star the human's ships reach first is shown in the
+    // middle of the map (assumed: before what else the turn brings).
+    app.arrivals.clear();
+    for (std::size_t i = 0; i < human.explored.size(); ++i) {
+        if (human.explored[i] && (i >= explored.size() || !explored[i])) {
+            app.arrivals.push_back(static_cast<int>(i));
+        }
+    }
+    if (!showArrival(app)) {
+        afterTurn(app);
+    }
 }
 
 // After the turn: a screen for each application learnt, then Select New
@@ -1117,11 +1228,13 @@ bool fleetEvent(App& app, SDL_Event* event) {
             openFleet(app, *fleet);
             return true;
         }
-        if (app.fleetWindow) {
-            if (const auto star = starAt(app, x, y)) {
+        if (const auto star = starAt(app, x, y)) {
+            if (app.fleetWindow) {
                 sendFleet(app, *star);
-                return true;
+            } else {
+                openSystem(app, *star);
             }
+            return true;
         }
         return false;
     }
@@ -1131,6 +1244,13 @@ bool fleetEvent(App& app, SDL_Event* event) {
             return true;
         }
         if (!app.fleetWindow) {
+            // Hegemon's keyboard: Space shows the star under the pointer.
+            if (event->key.key == SDLK_SPACE) {
+                if (const auto star = starAt(app, app.pointer->x(), app.pointer->y())) {
+                    openSystem(app, *star);
+                    return true;
+                }
+            }
             return false;
         }
         switch (event->key.key) {
@@ -1169,6 +1289,12 @@ bool fleetEvent(App& app, SDL_Event* event) {
             break;
         }
         if (!app.fleetWindow) {
+            if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+                if (const auto star = starAt(app, app.pointer->x(), app.pointer->y())) {
+                    openSystem(app, *star);
+                    return true;
+                }
+            }
             return false;
         }
         switch (event->gbutton.button) {
@@ -1249,7 +1375,7 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
             return SDL_APP_CONTINUE;
         }
     }
-    if (fleetEvent(app, event)) {
+    if (systemEvent(app, event) || fleetEvent(app, event)) {
         return SDL_APP_CONTINUE;
     }
     const bool turn =
@@ -1603,6 +1729,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             app->map->draw(app->canvas, app->palette);
             if (app->fleetWindow) {
                 app->fleetWindow->draw(app->canvas, app->palette);
+            }
+            if (app->systemWindow) {
+                app->systemWindow->tick(elapsed);
+                app->systemWindow->draw(app->canvas, app->palette);
             }
             if (app->homeName) {
                 app->homeName->tick(elapsed);

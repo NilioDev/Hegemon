@@ -93,21 +93,26 @@ BUFFER0.LBX:
 
 This draws the measured window to the pixel but two of its frame's.
 
-All the boxes are chosen when the window opens. A click on a box changes
+All the boxes are chosen when the window opens. The window stays open over
+the turn, showing the fleet where it is then.
+
+A click on a box changes
 whether its ship goes, All chooses them all, Close closes it. A click on a
 star sends the chosen ships there: the window then shows those ships with
 their ETA and no box chosen, and the Colonize Planet button goes.
 
 ## Added in Hegemon
 
-- The turn closes the window (not measured).
 - Clicking a star while no box is chosen sends the whole fleet.
 - Keyboard and gamepad: Tab (Shift+Tab) or the shoulder buttons open the
   next (previous) fleet; with the window open the arrow keys or the D-pad
   move the pointer to the nearest star that way, and Space or A sends the
   fleet there; Esc or B closes the window.
 
-Not done yet: what a fleet does when it arrives (the original shows the
-system and asks where to land a colony ship), fuel range, other players'
+A fleet reaching a star the player has not been to shows the star system
+(see [star-system.md](star-system.md)).
+
+Not done yet: landing a colony ship (the original asks where at once),
+fuel range, other players'
 fleets on the map, more than nine ships in a fleet (the original's window
 then has a scroll bar), and the other buttons.
