@@ -5,6 +5,7 @@
 #include "hegemon/data/text_table.hpp"
 #include "hegemon/game_data.hpp"
 #include "hegemon/rules/production.hpp"
+#include "hegemon/rules/ship_design.hpp"
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 
@@ -62,9 +63,23 @@ constexpr std::size_t kHelpTextAt = 103;
 constexpr std::size_t kDescriptionFont = 3;
 constexpr int kDescriptionSpacing = 1, kDescriptionX = 209, kDescriptionY = 119, kDescriptionStep = 15;
 constexpr int kDescriptionWrap = 249, kDescriptionWidth = 248, kWordGap = 3;
-// The right list: the ships and spies at their rows (the designs, rows 6
-// to 11, are still to come).
-constexpr std::size_t kSpyRow = 13;
+// The right list: the ships and spies at their rows, the designs on rows 6
+// to 11.
+constexpr std::size_t kSpyRow = 13, kFirstDesignRow = 6;
+// A design's box below, measured: font 1 with one pixel between letters,
+// 11 pixels a line from y 114; the labels at x 212 and their values at
+// 336; the weapons and specials two to a line at 217 and 336.
+constexpr std::size_t kDesignFont = 1;
+constexpr int kDesignSpacing = 1, kDesignLabelX = 212, kDesignValueX = 336, kDesignItemX = 217, kDesignY = 114,
+              kDesignStep = 11;
+// ESTRINGS.LBX labels of the box.
+constexpr std::size_t kArmorLabel = 91, kComputerLabel = 98, kCostLabel = 99, kShieldLabel = 119,
+                      kSpecialsLabel = 129, kWeaponsLabel = 130;
+// The original's label for the drive is not in the files.
+constexpr const char* kDriveLabel = "Drive type:";
+// The Scout's name: KENTEXT1.LBX entry 24. The other designs' names:
+// SHIPNAME.LBX entry 0, 48 a race, 8 a hull size.
+constexpr std::size_t kScoutNameEntry = 24, kShipNamesPerRace = 48;
 // Behind the frame the colony's scene in the blue ramp 244 to 254, as
 // measured: a landscape colour (0 to 79) by its brightness in six bits a
 // channel, 2 red + green + blue on even rows and 2 red + 2 green + blue on
@@ -150,6 +165,133 @@ TextStyle style(const std::array<std::uint8_t, 3>& colours) {
     return s;
 }
 
+// A label of the box: the message without its %s, %d and line ends.
+std::string label(const std::string& format) {
+    std::string out;
+    for (std::size_t i = 0; i < format.size(); ++i) {
+        if (format[i] == '%' && i + 1 < format.size() && (format[i + 1] == 's' || format[i + 1] == 'd')) {
+            ++i;
+        } else if (format[i] != '\n') {
+            out += format[i];
+        }
+    }
+    const auto first = out.find_first_not_of(' ');
+    const auto last = out.find_last_not_of(' ');
+    return first == std::string::npos ? std::string() : out.substr(first, last - first + 1);
+}
+
+// The ship parts' names at the end of TECHNAME.LBX's first entry (counted
+// back from its last name, as the buildings before them are more than the
+// fan patch's table has): "No Special" and the specials, the armors,
+// shields, weapons, computers and drives (each list starting with its
+// "No ..."), 4 kinds of units, 6 fuel cells, the mods' long and short names
+// (each after a name for none), the weapons' plurals, then the hull sizes'
+// names and their plurals.
+struct PartNames {
+    std::vector<std::string> specials, armor, shields, weapons, computers, drives, shortMods, plurals;
+};
+
+PartNames partNames(const Parameters& p, const TechNames& names) {
+    const auto rows = [&](std::string_view setting) {
+        const ParameterDefinition* d = p.definition(setting);
+        if (d == nullptr || d->rowNames.empty()) {
+            throw FormatError("missing setting " + std::string(setting));
+        }
+        return d->rowNames[0].size() + 1;
+    };
+    constexpr std::size_t kUnits = 4, kFuelCells = 6, kHullNames = 9;
+    std::size_t last = 0;
+    for (std::size_t i = 0; const std::string* w = names.afterTechs(i); ++i) {
+        if (!w->empty()) {
+            last = i;
+        }
+    }
+    const std::size_t total = rows("special") + rows("armor") + rows("shield") + rows("weapon") + rows("computer") +
+                              rows("drive") + kUnits + kFuelCells + 2 * rows("weapon_mod") + rows("weapon") +
+                              2 * kHullNames;
+    if (last + 1 < total) {
+        throw FormatError("TECHNAME.LBX: too few names");
+    }
+    std::size_t at = last + 1 - total;
+    const auto take = [&](std::size_t n) {
+        std::vector<std::string> list;
+        for (std::size_t i = 0; i < n; ++i) {
+            list.push_back(*names.afterTechs(at + i));
+        }
+        at += n;
+        return list;
+    };
+    PartNames n;
+    n.specials = take(rows("special"));
+    n.armor = take(rows("armor"));
+    n.shields = take(rows("shield"));
+    n.weapons = take(rows("weapon"));
+    n.computers = take(rows("computer"));
+    n.drives = take(rows("drive"));
+    at += kUnits + kFuelCells + rows("weapon_mod");
+    n.shortMods = take(rows("weapon_mod"));
+    n.plurals = take(rows("weapon"));
+    return n;
+}
+
+const std::string& nameIn(const std::vector<std::string>& list, int index) {
+    static const std::string none;
+    return index >= 0 && static_cast<std::size_t>(index) < list.size() ? list[static_cast<std::size_t>(index)] : none;
+}
+
+// What the box lists for a design, measured on the original.
+std::vector<BuildListScreen::PlacedText> designLines(const ShipDesign& d, const PartNames& n,
+                                                     const std::vector<std::string>& messages) {
+    std::vector<BuildListScreen::PlacedText> out;
+    int y = kDesignY;
+    const auto line = [&](const std::string& name, const std::string& value) {
+        out.push_back({kDesignLabelX, y, label(name)});
+        out.push_back({kDesignValueX, y, value});
+        y += kDesignStep;
+    };
+    line(messages[kCostLabel], std::to_string(d.cost));
+    line(messages[kShieldLabel], nameIn(n.shields, d.shield));
+    line(messages[kComputerLabel], nameIn(n.computers, d.computer));
+    line(messages[kArmorLabel], nameIn(n.armor, d.armor));
+    out.push_back({kDesignLabelX, y, kDriveLabel});
+    out.push_back({kDesignValueX, y, nameIn(n.drives, d.drive)});
+    y += kDesignStep;
+    const auto list = [&](const std::string& title, const std::vector<std::string>& items) {
+        if (items.empty()) {
+            return;
+        }
+        y += kDesignStep;
+        out.push_back({kDesignLabelX, y, label(title)});
+        y += kDesignStep;
+        for (std::size_t i = 0; i < items.size(); ++i) {
+            out.push_back({i % 2 == 0 ? kDesignItemX : kDesignValueX, y, items[i]});
+            if (i % 2 == 1 || i + 1 == items.size()) {
+                y += kDesignStep;
+            }
+        }
+    };
+    std::vector<std::string> weapons;
+    for (const WeaponMount& m : d.weapons) {
+        std::string text = std::to_string(m.count) + " ";
+        for (std::size_t bit = 1; bit < n.shortMods.size(); ++bit) {
+            if (((m.mods >> bit) & 1) != 0) {
+                text += n.shortMods[bit] + " ";
+            }
+        }
+        text += nameIn(m.count == 1 ? n.weapons : n.plurals, m.weapon);
+        weapons.push_back(std::move(text));
+    }
+    list(messages[kWeaponsLabel], weapons);
+    std::vector<std::string> specials;
+    for (int id = 1; id < static_cast<int>(n.specials.size()); ++id) {
+        if (d.hasSpecial(id)) {
+            specials.push_back(n.specials[static_cast<std::size_t>(id)]);
+        }
+    }
+    list(messages[kSpecialsLabel], specials);
+    return out;
+}
+
 std::array<std::uint8_t, 3> colourGroup(const Parameters& p, std::string_view row) {
     std::array<std::uint8_t, 3> c{};
     const std::array<std::string_view, 3> columns = {"base", "dim", "dark"};
@@ -161,7 +303,33 @@ std::array<std::uint8_t, 3> colourGroup(const Parameters& p, std::string_view ro
 
 } // namespace
 
-std::string productName(GameData& data, std::string_view product) {
+std::string designName(GameData& data, int race, const ShipDesign& design) {
+    if (!design.name.empty()) {
+        return design.name;
+    }
+    if (design.nameIndex < 0) {
+        const TextTable scout = TextTable::parse(data.archive("KENTEXT1.LBX").entry(kScoutNameEntry));
+        if (scout.size() == 0) {
+            throw FormatError("KENTEXT1.LBX: the Scout's name is missing");
+        }
+        return scout.at(0);
+    }
+    const TextTable names = TextTable::parse(data.archive("SHIPNAME.LBX").entry(0));
+    const std::size_t at = kShipNamesPerRace * static_cast<std::size_t>(std::max(race, 0)) +
+                           static_cast<std::size_t>(design.nameIndex);
+    if (at >= names.size()) {
+        throw FormatError("SHIPNAME.LBX: too few names");
+    }
+    return names.at(at);
+}
+
+std::string productName(GameData& data, std::string_view product, const Player* owner) {
+    if (const auto slot = designSlot(product)) {
+        if (owner == nullptr || *slot >= owner->designs.size()) {
+            return {};
+        }
+        return designName(data, owner->race, owner->designs[*slot]);
+    }
     const Parameters& p = data.parameters();
     const auto messages = parseStringList(data.archive("ESTRINGS.LBX").entry(0));
     if (messages.size() <= kLastMessage) {
@@ -294,13 +462,28 @@ BuildListScreen::BuildListScreen(GameData& data, const Game& game, const Economy
     for (std::size_t i = 0; i < b.others.size(); ++i) {
         if (b.others[i] == kSpy) {
             right_[kSpyRow] = b.others[i];
-        } else if (i < kSpyRow) {
+        } else if (i < kFirstDesignRow) {
             right_[i] = b.others[i];
         }
     }
-    const int race = game.players.at(static_cast<std::size_t>(colony_.player)).race;
+    const Player& owner = game.players.at(static_cast<std::size_t>(colony_.player));
+    const int race = owner.race;
+    if (!b.designs.empty()) {
+        const PartNames parts = partNames(p, techs);
+        for (std::size_t i = 0; i < b.designs.size() && kFirstDesignRow + i < kSpyRow; ++i) {
+            const ShipDesign& d = owner.designs.at(i);
+            right_[kFirstDesignRow + i] = b.designs[i];
+            names_.emplace_back(b.designs[i], designName(data, race, d));
+            costs_.emplace_back(b.designs[i], d.cost);
+            pictures_.emplace_back(b.designs[i], ProductPicture(data, b.designs[i], race, d.image));
+            designTexts_.emplace_back(b.designs[i], designLines(d, parts, messages));
+        }
+    }
     const TextTable help = TextTable::parse(data.archive(kHelpArchive).entry(0), kHelpTextAt);
     for (const auto& [product, unused] : names_) {
+        if (designSlot(product)) {
+            continue;
+        }
         costs_.emplace_back(product, productCost(p, product));
         pictures_.emplace_back(product, ProductPicture(data, product, race));
         const int tech = productTech(p, product);
@@ -378,6 +561,7 @@ void BuildListScreen::setHovered(std::optional<Slot> slot) {
     timeText_.clear();
     maintenanceText_.clear();
     description_.clear();
+    designText_.clear();
     const std::string* product = slot ? productAt(*slot) : nullptr;
     if (product == nullptr) {
         hovered_.reset();
@@ -405,6 +589,11 @@ void BuildListScreen::setHovered(std::optional<Slot> slot) {
     for (const auto& [key, text] : descriptions_) {
         if (key == *product) {
             description_ = wrapDescription(fonts_.font(kDescriptionFont), text);
+        }
+    }
+    for (const auto& [key, lines] : designTexts_) {
+        if (key == *product) {
+            designText_ = lines;
         }
     }
 }
@@ -564,6 +753,14 @@ void BuildListScreen::draw(Canvas& canvas, Palette& palette) const {
             y += kInfoStep;
         }
         queueFont.draw(canvas, kInfoX, y, timeText_, normal);
+
+        TextStyle part = normal;
+        part.spacing = kDesignSpacing;
+        part.shadow.reset();
+        part.shadowAt.clear();
+        for (const PlacedText& t : designText_) {
+            fonts_.font(kDesignFont).draw(canvas, t.x, t.y, t.text, part);
+        }
 
         const Font& font = fonts_.font(kDescriptionFont);
         TextStyle text = normal;

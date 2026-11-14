@@ -7,6 +7,7 @@
 
 #include "hegemon/rules/galaxy.hpp"
 #include "hegemon/rules/races.hpp"
+#include "hegemon/rules/ship_design.hpp"
 #include "hegemon/rules/tech.hpp"
 
 #include <array>
@@ -46,12 +47,15 @@ struct Colony {
     bool has(std::string_view building) const;
 };
 
-enum class ShipKind : std::uint8_t { Scout, ColonyShip, OutpostShip, Transport };
+// The starting scouts and the landing ships, and ships of the player's
+// designs.
+enum class ShipKind : std::uint8_t { Scout, ColonyShip, OutpostShip, Transport, Combat };
 
 struct Ship {
     int player = 0;
     ShipKind kind = ShipKind::Scout;
     int star = 0; // where it is
+    int design = -1; // for a Combat ship: the slot of the design it was built to
 };
 
 struct Player {
@@ -70,6 +74,8 @@ struct Player {
     std::vector<int> learntTechs;
     int freighterFleets = 0;
     int spies = 0;
+    // The designs of ships it can build, in the build list's order.
+    std::vector<ShipDesign> designs;
 };
 
 struct Game {
@@ -155,9 +161,10 @@ std::string planetName(const Galaxy& galaxy, int planet, const std::string& prim
 void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Random& random);
 
 // Starts a game in the galaxy: a home colony, ships and money for each
-// player (with average technology). `picks` and `banners` are in the order
-// of the galaxy's home systems.
+// player (with average technology), and the ship designs each starts with,
+// made with numbers from `seed`. `picks` and `banners` are in the order of
+// the galaxy's home systems.
 Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<RacePicks>& picks,
-               const std::vector<std::size_t>& banners);
+               const std::vector<std::size_t>& banners, std::uint64_t seed = 0);
 
 } // namespace hegemon

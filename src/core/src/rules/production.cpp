@@ -83,12 +83,34 @@ Buildable buildable(const Parameters& p, const Game& game, std::size_t colonyInd
         b.others.emplace_back(kTransportShip);
     }
     b.others.emplace_back(kSpy);
+    for (std::size_t i = 0; i < player.designs.size() && i < kDesignSlots; ++i) {
+        b.designs.push_back(designProduct(i));
+    }
     return b;
 }
 
-int productCost(const Parameters& p, std::string_view product) {
+std::string designProduct(std::size_t slot) {
+    return "design" + std::to_string(slot + 1);
+}
+
+std::optional<std::size_t> designSlot(std::string_view product) {
+    constexpr std::string_view prefix = "design";
+    if (product.size() != prefix.size() + 1 || product.substr(0, prefix.size()) != prefix) {
+        return std::nullopt;
+    }
+    const char digit = product.back();
+    if (digit < '1' || digit > static_cast<char>('0' + kDesignSlots)) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(digit - '1');
+}
+
+int productCost(const Parameters& p, std::string_view product, std::span<const ShipDesign> designs) {
     if (product == kTradeGoods || product == kHousing) {
         return 0;
+    }
+    if (const auto slot = designSlot(product)) {
+        return *slot < designs.size() ? designs[*slot].cost : 0;
     }
     if (product == kColonyShip || product == kOutpostShip || product == kTransportShip) {
         return static_cast<int>(p.integer("lander_ship_cost", {}, product));
@@ -104,7 +126,7 @@ int productOrder(const Parameters& p, std::string_view product) {
 }
 
 bool repeatable(std::string_view product) {
-    return product == kTradeGoods || product == kHousing || product == kFreighters || product == kColonyShip ||
+    return designSlot(product).has_value() || product == kTradeGoods || product == kHousing || product == kFreighters || product == kColonyShip ||
            product == kOutpostShip || product == kTransportShip || product == kSpy;
 }
 
@@ -130,7 +152,8 @@ int buyPrice(int cost, int produced) {
            2 * (cost - std::max(made, half));
 }
 
-Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn) {
+Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn,
+                  std::span<const ShipDesign> designs) {
     Purchase p;
     if (colony.boughtPrice > 0) {
         p.kind = Purchase::Kind::Undo;
@@ -147,7 +170,7 @@ Purchase purchase(const Parameters& parameters, const Colony& colony, int money,
         p.kind = Purchase::Kind::NotBuyable;
         return p;
     }
-    const int cost = productCost(parameters, product);
+    const int cost = productCost(parameters, product, designs);
     p.amount = std::max(0, cost - colony.produced);
     if (p.amount <= perTurn) {
         p.kind = Purchase::Kind::ThisTurn;

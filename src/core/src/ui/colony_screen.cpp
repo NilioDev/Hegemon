@@ -299,9 +299,12 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
         int cost = 0, turns = 1;
         if (!c.buildList.empty()) {
             const std::string& what = c.buildList.front();
-            product_ = productName(data, what);
-            picture_.emplace(data, what, game.players.at(static_cast<std::size_t>(c.player)).race);
-            cost = productCost(data.parameters(), what);
+            const Player& owner = game.players.at(static_cast<std::size_t>(c.player));
+            product_ = productName(data, what, &owner);
+            const auto slot = designSlot(what);
+            picture_.emplace(data, what, owner.race,
+                             slot && *slot < owner.designs.size() ? owner.designs[*slot].image : -1);
+            cost = productCost(data.parameters(), what, owner.designs);
             const ColonyOutput made = economy.output(game, c);
             const int perTurn = std::max(0, made.production - made.upkeep);
             const int left = std::max(0, cost - c.produced);

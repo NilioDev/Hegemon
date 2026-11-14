@@ -35,8 +35,10 @@ gamepad, mouse, keyboard and touch controls.
 > Change opens its build list, where you put trade goods, housing, ships and
 > spies in the colony's list of up to seven things to build and see what each
 > costs and how many turns it takes, with the original's picture and description of each. Each turn the colony builds the first of
-> the list: buildings, colony, outpost and transport ships, freighters, spies
-> and colony bases, while trade goods earn money and housing speeds up growth,
+> the list: buildings, colony, outpost and transport ships, your six
+> warship designs (the Scout and five designed for you as in the original,
+> with their parts listed in the build list), freighters, spies and colony
+> bases, while trade goods earn money and housing speeds up growth,
 > and the colony screen shows what is being built and how far it is. Buy
 > finishes it at once for BC, at the original's price, and a second Buy in
 > the same turn takes the purchase back, as the fan patch allows. Esc on

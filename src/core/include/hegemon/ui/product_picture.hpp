@@ -23,8 +23,9 @@ public:
 
     // The picture of `product` (rules/production.hpp names or the fan
     // patch's building table) for a player of stock race `race`; none for
-    // a product without one. Throws FormatError when a file is damaged.
-    ProductPicture(GameData& data, std::string_view product, int race);
+    // a product without one; a design's picture is SHIPS.LBX entry
+    // `shipImage`. Throws FormatError when a file is damaged.
+    ProductPicture(GameData& data, std::string_view product, int race, int shipImage = -1);
 
     bool empty() const { return pixels_.empty(); }
     // Where its top left corner goes in a box; nothing when the box shows

@@ -30,6 +30,7 @@ add_library(hgm_core STATIC
     src/rules/galaxy_generator.cpp
     src/rules/empire.cpp
     src/rules/tech.cpp
+    src/rules/ship_design.cpp
     src/rules/production.cpp
     src/data/json.cpp
 )

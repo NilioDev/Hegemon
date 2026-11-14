@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <utility>
@@ -327,13 +328,13 @@ void produce(Game& game, const Parameters& parameters, const Economy& economy, C
     }
     const ColonyOutput out = economy.output(game, c);
     c.produced += std::max(0, out.production - out.upkeep);
-    const int cost = productCost(parameters, product);
+    Player& player = game.players.at(static_cast<std::size_t>(c.player));
+    const int cost = productCost(parameters, product, player.designs);
     if (c.produced < cost) {
         return;
     }
     c.produced -= cost;
     c.buildList.erase(c.buildList.begin());
-    Player& player = game.players.at(static_cast<std::size_t>(c.player));
     const int star = game.galaxy.planets.at(static_cast<std::size_t>(c.planet)).star;
     if (product == kColonyShip) {
         game.ships.push_back({c.player, ShipKind::ColonyShip, star});
@@ -345,6 +346,8 @@ void produce(Game& game, const Parameters& parameters, const Economy& economy, C
         ++player.freighterFleets;
     } else if (product == kSpy) {
         ++player.spies;
+    } else if (const auto slot = designSlot(product)) {
+        game.ships.push_back({c.player, ShipKind::Combat, star, static_cast<int>(*slot)});
     } else if (product == kColonyBase) {
         // A new colony of one on the system's first free planet (assumed).
         const Star& system = game.galaxy.stars.at(static_cast<std::size_t>(star));
@@ -449,12 +452,18 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
 }
 
 Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<RacePicks>& picks,
-               const std::vector<std::size_t>& banners) {
+               const std::vector<std::size_t>& banners, std::uint64_t seed) {
     if (picks.size() != galaxy.homes.size() || banners.size() != galaxy.homes.size()) {
         throw std::invalid_argument("startGame: one race and banner per home system");
     }
     const Economy economy(parameters);
     const TechTree tree(parameters);
+    // Settings without the ship tables (as in some tests) give no designs.
+    std::optional<ShipParts> parts;
+    if (parameters.definition("weapon") != nullptr) {
+        parts.emplace(parameters, tree);
+    }
+    Random random(seed);
     Game game;
     game.galaxy = std::move(galaxy);
     const int population = static_cast<int>(parameters.integer("starting_condition", {}, "starting_population"));
@@ -470,6 +479,9 @@ Game startGame(const Parameters& parameters, Galaxy galaxy, const std::vector<Ra
         player.human = i == 0;
         player.money = money;
         player.knowledge = tree.averageStart();
+        if (parts) {
+            player.designs = startingDesigns(parameters, *parts, player.knowledge, random);
+        }
         game.players.push_back(player);
 
         Colony colony;
