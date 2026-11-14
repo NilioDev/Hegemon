@@ -36,6 +36,10 @@ struct Colony {
     // rules/production.hpp and the building table.
     std::vector<std::string> buildList;
     int produced = 0; // production put into the first of the list so far
+    // What Buy added this turn, and the BC paid for it: the fan patch lets
+    // a second Buy take it back.
+    int boughtProduction = 0;
+    int boughtPrice = 0;
     static constexpr std::size_t kBuildListLength = 7;
 
     int population() const { return jobs[0] + jobs[1] + jobs[2]; }

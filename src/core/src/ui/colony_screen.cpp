@@ -31,6 +31,12 @@ constexpr std::size_t kProductFont = 1, kBoxFont = 0;
 // ESTRINGS.LBX messages.
 constexpr std::size_t kTitleMessage = 97;      // "%sColony of %s"
 constexpr std::size_t kPopulationMessage = 424; // "Pop %d,%03d k (%+dk)"
+// What Buy says.
+constexpr std::size_t kBuyMessage = 269;        // "Do you want to spend %d BC to buy %d production?"
+constexpr std::size_t kShortMessage = 564;      // "... You are short by %d BC."
+constexpr std::size_t kNotBuyableMessage = 568; // "You cannot buy Housing or Trade Goods..."
+constexpr std::size_t kThisTurnMessage = 578;   // "... faster than in a single turn."
+constexpr std::size_t kNothingMessage = 587;    // "You have no product selected to buy."
 // The title in font 4, centred on 320 at the top; the population in font
 // 2 ending at 639, three pixels down. Two pixels between letters; shades
 // in colours 245, 253 and 252.
@@ -274,6 +280,11 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
     title_ = formatMessage(messages[kTitleMessage],
                            {std::string(), planetName(game.galaxy, c.planet, strings[kPrimeText])});
     planetList(data, game, economy, c, messages);
+    buyQuestion_ = messages[kBuyMessage];
+    buyShort_ = messages[kShortMessage];
+    buyNotBuyable_ = messages[kNotBuyableMessage];
+    buyThisTurn_ = messages[kThisTurnMessage];
+    buyNothing_ = messages[kNothingMessage];
     if (strings.size() <= kTurnsText) {
         throw FormatError("too few messages in HESTRNGS.LBX");
     }
@@ -397,8 +408,31 @@ void ColonyScreen::tick(std::uint64_t ms) {
     }
 }
 
+std::string ColonyScreen::buyText(const Purchase& p) const {
+    switch (p.kind) {
+    case Purchase::Kind::Offer:
+        return formatMessage(buyQuestion_, {static_cast<long long>(p.price), static_cast<long long>(p.amount)});
+    case Purchase::Kind::Short:
+        return formatMessage(buyShort_, {static_cast<long long>(p.shortBy)});
+    case Purchase::Kind::NotBuyable:
+        return buyNotBuyable_;
+    case Purchase::Kind::ThisTurn:
+        return buyThisTurn_;
+    case Purchase::Kind::NothingSelected:
+        return buyNothing_;
+    case Purchase::Kind::Undo:
+        break;
+    }
+    return {};
+}
+
 void ColonyScreen::press(int x, int y) {
-    held_ = kReturnButton.contains(x, y) ? kReturnButton : kChangeButton.contains(x, y) ? kChangeButton : Rect{};
+    held_ = Rect{};
+    for (const Rect& r : {kReturnButton, kChangeButton, kBuyButton}) {
+        if (r.contains(x, y)) {
+            held_ = r;
+        }
+    }
 }
 
 ColonyScreen::Action ColonyScreen::release(int x, int y) {
@@ -407,7 +441,7 @@ ColonyScreen::Action ColonyScreen::release(int x, int y) {
     if (!held.contains(x, y)) {
         return Action::None;
     }
-    return held.x == kReturnButton.x ? Action::Return : Action::Change;
+    return held.x == kReturnButton.x ? Action::Return : held.x == kChangeButton.x ? Action::Change : Action::Buy;
 }
 
 Palette ColonyScreen::palette() const {

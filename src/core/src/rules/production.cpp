@@ -120,4 +120,61 @@ bool addToBuildList(Colony& colony, std::string_view product) {
     return true;
 }
 
+int buyPrice(int cost, int produced) {
+    // Measured: each point still to make costs 10 BC in the first tenth of
+    // the product, 5 up to its half and 2 after (assumed: the tenth and the
+    // half rounded down). With nothing made that is four BC a point.
+    const int tenth = cost / 10, half = cost / 2;
+    const int made = std::clamp(produced, 0, cost);
+    return 10 * std::max(0, tenth - made) + 5 * std::max(0, half - std::max(made, tenth)) +
+           2 * (cost - std::max(made, half));
+}
+
+Purchase purchase(const Parameters& parameters, const Colony& colony, int money, int perTurn) {
+    Purchase p;
+    if (colony.boughtPrice > 0) {
+        p.kind = Purchase::Kind::Undo;
+        p.price = colony.boughtPrice;
+        p.amount = colony.boughtProduction;
+        return p;
+    }
+    if (colony.buildList.empty()) {
+        p.kind = Purchase::Kind::NothingSelected;
+        return p;
+    }
+    const std::string& product = colony.buildList.front();
+    if (product == kHousing || product == kTradeGoods) {
+        p.kind = Purchase::Kind::NotBuyable;
+        return p;
+    }
+    const int cost = productCost(parameters, product);
+    p.amount = std::max(0, cost - colony.produced);
+    if (p.amount <= perTurn) {
+        p.kind = Purchase::Kind::ThisTurn;
+        return p;
+    }
+    p.price = buyPrice(cost, colony.produced);
+    if (p.price > money) {
+        p.kind = Purchase::Kind::Short;
+        p.shortBy = p.price - money;
+    } else {
+        p.kind = Purchase::Kind::Offer;
+    }
+    return p;
+}
+
+void buy(Colony& colony, int& money, const Purchase& p) {
+    if (p.kind == Purchase::Kind::Offer) {
+        money -= p.price;
+        colony.produced += p.amount;
+        colony.boughtPrice = p.price;
+        colony.boughtProduction = p.amount;
+    } else if (p.kind == Purchase::Kind::Undo) {
+        money += colony.boughtPrice;
+        colony.produced -= colony.boughtProduction;
+        colony.boughtPrice = 0;
+        colony.boughtProduction = 0;
+    }
+}
+
 } // namespace hegemon

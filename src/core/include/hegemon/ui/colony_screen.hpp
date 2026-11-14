@@ -8,6 +8,7 @@
 #include "hegemon/data/font.hpp"
 #include "hegemon/data/image.hpp"
 #include "hegemon/rules/empire.hpp"
+#include "hegemon/rules/production.hpp"
 #include "hegemon/ui/pit_timer.hpp"
 #include "hegemon/ui/rect.hpp"
 
@@ -29,6 +30,8 @@ public:
     static constexpr Rect kReturnButton = {552, 457, 77, 22};
     // Measured: Change, which opens the build list.
     static constexpr Rect kChangeButton = {520, 124, 60, 20};
+    // Measured: Buy, beside it.
+    static constexpr Rect kBuyButton = {590, 124, 37, 20};
 
     // Reads the pictures for a colony of the game. Throws FormatError when a
     // file is damaged.
@@ -41,6 +44,10 @@ public:
     const std::string& productText() const { return product_; }
     const std::string& turnsText() const { return turns_; }
     const std::string& progressText() const { return progress_; }
+
+    // What Buy says: the question for an offer, the message otherwise;
+    // empty for an undo, which says nothing (assumed).
+    std::string buyText(const Purchase& purchase) const;
 
     // The ways a home colony's landscape is laid out, as measured: which
     // building or decoration stands on which of the 36 places, and the roads.
@@ -59,7 +66,7 @@ public:
     static int iconStep(std::size_t places);
 
     // The mouse: what a button let go over does.
-    enum class Action : std::uint8_t { None, Return, Change };
+    enum class Action : std::uint8_t { None, Return, Change, Buy };
     void press(int x, int y);
     Action release(int x, int y);
 
@@ -112,6 +119,7 @@ private:
     std::string title_;
     std::string population_;
     std::string product_, turns_, progress_;
+    std::string buyQuestion_, buyShort_, buyNotBuyable_, buyThisTurn_, buyNothing_;
     Rect held_{};
 };
 
