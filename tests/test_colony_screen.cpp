@@ -111,3 +111,55 @@ HGM_TEST("Colony screen: the rows of money, food, production and research") {
     // A lithovore eats nothing.
     HGM_CHECK(rows(11, PlanetSize::Medium, Special::None)[1].empty());
 }
+
+HGM_TEST("Colony screen: the planets of the system") {
+    const fs::path folder = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(folder)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(folder);
+    const Races races(data);
+    Galaxy g;
+    Star s;
+    s.name = "Altair";
+    s.orbits = {0, 1, 2, 3, kNoPlanet};
+    g.stars.push_back(s);
+    Planet home;
+    home.climate = Climate::Terran;
+    Planet giant;
+    giant.type = SatelliteType::GasGiant;
+    Planet belt;
+    belt.type = SatelliteType::AsteroidBelt;
+    Planet barren;
+    barren.size = PlanetSize::Large;
+    barren.gravity = Gravity::Low;
+    barren.minerals = Minerals::UltraPoor;
+    for (Planet* p : {&home, &giant, &belt, &barren}) {
+        p->orbit = static_cast<int>(g.planets.size());
+        g.planets.push_back(*p);
+    }
+    g.homes.push_back({0, 0, 0});
+    const Game game = startGame(data.parameters(), g, {races.stock(0)}, {0});
+    ColonyScreen screen(data, game, Economy(data.parameters()), 0);
+    using T = std::array<std::string, 2>;
+    // Measured texts: the colony's race and people, the planets' size,
+    // climate, gravity and minerals, a gas giant broken over two lines.
+    HGM_CHECK((screen.orbitText(0) == T{"Alkari - ", " (8/12)"}));
+    // Minerals other than abundant come before the people (measured: "Rich (8/12)").
+    HGM_CHECK((screen.orbitText(1) == T{"Gas Giant -", "uninhabitable"}));
+    HGM_CHECK((screen.orbitText(2) == T{"Asteroids", ""}));
+    HGM_CHECK((screen.orbitText(3) == T{"L Barren- LG", "U-Poor"}));
+    HGM_CHECK((screen.orbitText(4) == T{"", ""}));
+    Canvas canvas(640, 480);
+    Palette palette;
+    screen.tick(1000);
+    screen.draw(canvas, palette);
+    // The colony shown in red.
+    int red = 0;
+    for (int y = 31; y < 53; ++y) {
+        for (int x = 35; x < 100; ++x) {
+            red += canvas.at(x, y) == 238 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(red > 50);
+}

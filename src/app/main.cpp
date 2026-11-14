@@ -964,6 +964,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     app->lastTicks = now;
     if (app->menu) {
         if (app->colony) {
+            app->colony->tick(elapsed);
             app->colony->draw(app->canvas, app->palette);
         } else if (app->research) {
             app->research->tick(elapsed);
