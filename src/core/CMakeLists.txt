@@ -17,6 +17,7 @@ add_library(hgm_core STATIC
     src/ui/message_box.cpp
     src/ui/product_picture.cpp
     src/ui/banner_select.cpp
+    src/ui/fleet_window.cpp
     src/rules/races.cpp
     src/data/lbx.cpp
     src/data/image.cpp
@@ -32,6 +33,7 @@ add_library(hgm_core STATIC
     src/rules/tech.cpp
     src/rules/ship_design.cpp
     src/rules/production.cpp
+    src/rules/fleet.cpp
     src/data/json.cpp
 )
 add_library(hegemon::core ALIAS hgm_core)

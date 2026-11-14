@@ -6,6 +6,7 @@
 #include "hegemon/game_data.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
 #include <utility>
 
@@ -55,6 +56,22 @@ constexpr std::array<std::uint8_t, 8> kBannerTextDark = {74, 74, 74, 74, 74, 74,
 // with one, the huge one assumed like the large one).
 constexpr std::size_t kFleetLast = 208;
 constexpr std::array<std::array<int, 2>, 4> kFleetOffset = {{{-6, 0}, {-5, -1}, {-6, -2}, {-6, -2}}};
+// A fleet sent off but still at its star: its top left corner this far
+// left of and above the star picture's top left one (measured on the
+// medium map with one star).
+constexpr int kLeavingDx = -4, kLeavingDy = -2;
+// The course of a fleet on its way: from the marker's middle to the star's,
+// dashes of six in three greens and gaps of two in a darker one, moving
+// along (measured).
+constexpr std::array<std::uint8_t, 8> kDashes = {110, 110, 111, 114, 116, 116, 114, 111};
+// "eta N" (HESTRNGS.LBX) under a fleet on its way: font 1 in the banner's
+// colours, its left 7 pixels left of the marker's, its top under it
+// (measured with one fleet).
+constexpr std::size_t kEtaText = 307;
+constexpr std::size_t kEtaFont = 1;
+constexpr int kEtaDx = -7;
+// The names of explored stars no one of the human's owns: grey.
+constexpr std::uint8_t kExploredName = 12, kExploredNameDark = 1;
 
 // The side panel's texts: font 2 in two greys, centred on x 579 (the
 // stardate on 580).
@@ -72,6 +89,16 @@ constexpr int kFreightSplit[2] = {576, 578};
 constexpr std::size_t kNoneText = 392; // HESTRNGS.LBX: "none"
 
 std::string signedNumber(int n) { return (n >= 0 ? "+" : "") + std::to_string(n); }
+
+// A message with its "%d" filled in.
+std::string formatNumber(const std::string& message, int n) {
+    std::string text = message;
+    const auto at = text.find("%d");
+    if (at != std::string::npos) {
+        text.replace(at, 2, std::to_string(n));
+    }
+    return text;
+}
 
 // The Enter Home Star Name box: its corner, its title (HESTRNGS.LBX) and
 // its texts' colours.
@@ -119,6 +146,10 @@ GalaxyMap::GalaxyMap(GameData& data, const Galaxy& galaxy, std::vector<std::size
         throw FormatError("too few messages in HESTRNGS.LBX");
     }
     none_ = strings[kNoneText];
+    if (strings.size() <= kEtaText) {
+        throw FormatError("too few messages in HESTRNGS.LBX");
+    }
+    eta_ = strings[kEtaText];
     const auto& sky = data.archive(kSkyArchive);
     for (std::size_t i = 0; i < kNebulaPictures; ++i) {
         nebulae_.push_back(
@@ -152,39 +183,46 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
             nebulae_[static_cast<std::size_t>(n.picture)].draw(0, canvas, screenX(n.x), screenY(n.y));
         }
     }
+    for (const Marker& f : fleets_) {
+        drawCourse(canvas, f);
+    }
     for (const Star& s : galaxy_.stars) {
         const Image& picture = starPicture(s);
         picture.draw(0, canvas, screenX(s.x) - (picture.width() - 1) / 2, screenY(s.y) - (picture.height() - 1) / 2);
     }
-    // The human's fleets, in their banner's colour.
+    // The human's fleets, in their banner's colour, over their courses.
     if (!banners_.empty() && fleet_.frameCount() > 0) {
         const auto frame = std::min(banners_[0], fleet_.frameCount() - 1);
-        const auto& offset = kFleetOffset[static_cast<std::size_t>(scale_)];
-        for (const int star : fleets_) {
-            if (star >= 0 && static_cast<std::size_t>(star) < galaxy_.stars.size()) {
-                const Star& s = galaxy_.stars[static_cast<std::size_t>(star)];
-                const Image& picture = starPicture(s);
-                fleet_.draw(frame, canvas, screenX(s.x) + (picture.width() - 1) / 2 + offset[0],
-                            screenY(s.y) - (picture.height() - 1) / 2 + offset[1]);
-            }
+        for (const Marker& f : fleets_) {
+            const Rect r = markerRect(f);
+            fleet_.draw(frame, canvas, r.x, r.y);
         }
-    }
-    // At first the player knows only the name of their own home star.
-    const Font& font = fonts_.font(kNameFont);
-    for (std::size_t i = 0; i < 1 && i < galaxy_.homes.size() && i < banners_.size(); ++i) {
-        const Star& s = galaxy_.stars.at(static_cast<std::size_t>(galaxy_.homes[i].star));
-        const std::size_t banner = std::min<std::size_t>(banners_[i], kBannerText.size() - 1);
+        const Font& small = fonts_.font(kEtaFont);
+        const std::size_t banner = std::min<std::size_t>(banners_[0], kBannerText.size() - 1);
         TextStyle style;
         style.shades[1] = kBannerTextDark[banner];
         style.shades[2] = kBannerText[banner];
-        style.spacing = kNameSpacing;
-        style.shadowShades[1] = kOutline1;
-        style.shadowShades[2] = kOutline2;
-        style.shadowAt = kOutlineOrder;
-        // Centred on the letters, without the spacing after the last one.
-        const int width = font.textWidth(s.name, kNameSpacing) - kNameSpacing;
-        font.draw(canvas, screenX(s.x) - width / 2,
-                  screenY(s.y) + kNameBelow[static_cast<std::size_t>(std::clamp(s.size, 0, 2))], s.name, style);
+        style.spacing = 1;
+        for (const Marker& f : fleets_) {
+            if (f.star < 0 && f.destination >= 0) {
+                const Rect r = markerRect(f);
+                small.draw(canvas, r.x + kEtaDx, r.y + r.h, formatNumber(eta_, f.eta), style);
+            }
+        }
+    }
+    // The names of the stars the human knows: their home's in the banner's
+    // colour, the others they explored in grey.
+    if (!galaxy_.homes.empty() && !banners_.empty()) {
+        const int home = galaxy_.homes[0].star;
+        for (std::size_t i = 0; i < galaxy_.stars.size() && i < explored_.size(); ++i) {
+            if (explored_[i] && static_cast<int>(i) != home) {
+                drawName(canvas, galaxy_.stars[i], kExploredNameDark, kExploredName);
+            }
+        }
+        const std::size_t banner = std::min<std::size_t>(banners_[0], kBannerText.size() - 1);
+        if (home >= 0 && static_cast<std::size_t>(home) < galaxy_.stars.size()) {
+            drawName(canvas, galaxy_.stars[static_cast<std::size_t>(home)], kBannerTextDark[banner], kBannerText[banner]);
+        }
     }
     // The map leaves the frame opening's left, top and right edges black.
     for (int y = kView.y; y < kView.y + kView.h; ++y) {
@@ -198,6 +236,60 @@ void GalaxyMap::draw(Canvas& canvas, Palette& palette) const {
     if (panel_) {
         drawPanel(canvas);
     }
+}
+
+Rect GalaxyMap::markerRect(const Marker& fleet) const {
+    const int w = fleet_.width(), h = fleet_.height();
+    if (fleet.star >= 0 && static_cast<std::size_t>(fleet.star) < galaxy_.stars.size()) {
+        const Star& s = galaxy_.stars[static_cast<std::size_t>(fleet.star)];
+        const Image& picture = starPicture(s);
+        const auto& offset = kFleetOffset[static_cast<std::size_t>(scale_)];
+        const int top = screenY(s.y) - (picture.height() - 1) / 2;
+        if (fleet.destination >= 0) {
+            return {screenX(s.x) - (picture.width() - 1) / 2 + kLeavingDx, top + kLeavingDy, w, h};
+        }
+        return {screenX(s.x) + (picture.width() - 1) / 2 + offset[0], top + offset[1], w, h};
+    }
+    // On its way: centred on its place.
+    return {screenX(fleet.x) - w / 2, screenY(fleet.y) - h / 2, w, h};
+}
+
+void GalaxyMap::drawCourse(Canvas& canvas, const Marker& fleet) const {
+    if (fleet.destination < 0 || static_cast<std::size_t>(fleet.destination) >= galaxy_.stars.size()) {
+        return;
+    }
+    const Rect r = markerRect(fleet);
+    const Star& target = galaxy_.stars[static_cast<std::size_t>(fleet.destination)];
+    const int x0 = r.x + r.w / 2, y0 = r.y + r.h / 2;
+    const int x1 = screenX(target.x), y1 = screenY(target.y);
+    const int dx = x1 - x0, dy = y1 - y0;
+    const int steps = std::max(std::abs(dx), std::abs(dy));
+    for (int i = 0; i <= steps; ++i) {
+        // Each step along the longer side, the other side rounded to the
+        // nearest pixel.
+        const int x = steps == 0 ? x0 : x0 + (2 * dx * i + (dx < 0 ? -steps : steps)) / (2 * steps);
+        const int y = steps == 0 ? y0 : y0 + (2 * dy * i + (dy < 0 ? -steps : steps)) / (2 * steps);
+        const int n = static_cast<int>(kDashes.size());
+        const std::uint8_t colour = kDashes[static_cast<std::size_t>(((i - dashStep_) % n + n) % n)];
+        if (kMapClip.contains(x, y)) {
+            canvas.set(x, y, colour);
+        }
+    }
+}
+
+void GalaxyMap::drawName(Canvas& canvas, const Star& s, std::uint8_t dark, std::uint8_t light) const {
+    const Font& font = fonts_.font(kNameFont);
+    TextStyle style;
+    style.shades[1] = dark;
+    style.shades[2] = light;
+    style.spacing = kNameSpacing;
+    style.shadowShades[1] = kOutline1;
+    style.shadowShades[2] = kOutline2;
+    style.shadowAt = kOutlineOrder;
+    // Centred on the letters, without the spacing after the last one.
+    const int width = font.textWidth(s.name, kNameSpacing) - kNameSpacing;
+    font.draw(canvas, screenX(s.x) - width / 2, screenY(s.y) + kNameBelow[static_cast<std::size_t>(std::clamp(s.size, 0, 2))],
+              s.name, style);
 }
 
 void GalaxyMap::drawPanel(Canvas& canvas) const {

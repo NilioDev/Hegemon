@@ -18,11 +18,13 @@
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
 #include "hegemon/rules/empire.hpp"
+#include "hegemon/rules/fleet.hpp"
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
+#include "hegemon/ui/fleet_window.hpp"
 #include "hegemon/ui/galaxy_map.hpp"
 #include "hegemon/ui/message_box.hpp"
 #include "hegemon/ui/race_select.hpp"
@@ -76,6 +78,9 @@ struct App {
     std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
     std::unique_ptr<hegemon::MessageBox> message;             // what Buy says, over the colony screen
     hegemon::Purchase purchase;                               // what it offers
+    std::unique_ptr<hegemon::FleetWindow> fleetWindow;        // over the map
+    std::size_t banner0 = 0;                                  // the human's banner colour
+    Uint64 dashTime = 0;                                      // for the courses' moving dashes
     std::mt19937 random{std::random_device{}()};
     hegemon::NewGameSettings settings;
     hegemon::Canvas canvas{kScreenW, kScreenH};
@@ -360,6 +365,7 @@ void chooseBanner(App& app, hegemon::BannerSelectScreen::Colour colour) {
 void backToMainMenu(App& app) {
     SDL_StopTextInput(app.window);
     app.homeName.reset();
+    app.fleetWindow.reset();
     app.buildList.reset();
     app.colony.reset();
     app.message.reset();
@@ -384,6 +390,145 @@ void backToMainMenu(App& app) {
 // The side panel shows the human's empire as it is now.
 void updatePanel(App& app) {
     app.map->setPanel(app.game->stardate, hegemon::Economy(app.data->parameters()).summary(*app.game, 0));
+}
+
+// The human's fleets and explored stars on the map.
+void updateFleets(App& app) {
+    std::vector<hegemon::GalaxyMap::Marker> markers;
+    for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
+        if (f.player != 0) {
+            continue;
+        }
+        hegemon::GalaxyMap::Marker m;
+        m.star = f.star;
+        m.x = f.place.x;
+        m.y = f.place.y;
+        m.destination = f.destination;
+        if (f.destination >= 0) {
+            const auto& to = app.game->galaxy.stars.at(static_cast<std::size_t>(f.destination));
+            m.eta = hegemon::travelTurns(f.place, {to.x, to.y}, app.game->ships.at(f.ships.front()).speed);
+        }
+        markers.push_back(m);
+    }
+    app.map->setFleets(std::move(markers));
+    app.map->setExplored(app.game->players.at(0).explored);
+}
+
+// The human's fleet whose marker is at (x, y), if any.
+std::optional<hegemon::Fleet> fleetAt(App& app, int x, int y) {
+    for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
+        if (f.player != 0) {
+            continue;
+        }
+        hegemon::GalaxyMap::Marker m;
+        m.star = f.star;
+        m.x = f.place.x;
+        m.y = f.place.y;
+        m.destination = f.destination;
+        if (app.map->markerRect(m).contains(x, y)) {
+            return f;
+        }
+    }
+    return std::nullopt;
+}
+
+// The star drawn at (x, y): the nearest within a few pixels (Hegemon's
+// choice).
+std::optional<int> starAt(App& app, int x, int y) {
+    constexpr int kReach = 8;
+    std::optional<int> best;
+    int bestDistance = kReach * kReach + 1;
+    const auto& stars = app.game->galaxy.stars;
+    for (std::size_t i = 0; i < stars.size(); ++i) {
+        const int dx = app.map->screenX(stars[i].x) - x, dy = app.map->screenY(stars[i].y) - y;
+        if (dx * dx + dy * dy < bestDistance) {
+            bestDistance = dx * dx + dy * dy;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+void openFleet(App& app, const hegemon::Fleet& fleet) {
+    try {
+        app.fleetWindow = std::make_unique<hegemon::FleetWindow>(*app.data, *app.game, fleet, app.banner0);
+        app.fleetWindow->hover(app.pointer->x(), app.pointer->y());
+    } catch (const std::exception& e) {
+        SDL_Log("The fleet window could not be read: %s", e.what());
+    }
+}
+
+// The fleet window's chosen ships go to `star`; the window then shows them.
+void sendFleet(App& app, int star) {
+    // Once sent off no box is marked: the whole fleet changes course then.
+    auto ships = app.fleetWindow->chosen();
+    if (ships.empty()) {
+        ships = app.fleetWindow->ships();
+    }
+    if (ships.empty()) {
+        return;
+    }
+    hegemon::orderShips(*app.game, app.data->parameters(), ships, star);
+    for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
+        if (std::find(f.ships.begin(), f.ships.end(), ships.front()) != f.ships.end()) {
+            app.fleetWindow->update(*app.game, f);
+            break;
+        }
+    }
+    updateFleets(app);
+}
+
+// Hegemon's keyboard and gamepad on the map: the next of the human's
+// fleets after the one shown, or the first.
+void nextFleet(App& app, int step) {
+    std::vector<hegemon::Fleet> own;
+    for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
+        if (f.player == 0) {
+            own.push_back(f);
+        }
+    }
+    if (own.empty()) {
+        return;
+    }
+    int at = -1;
+    if (app.fleetWindow && !app.fleetWindow->ships().empty()) {
+        for (std::size_t i = 0; i < own.size(); ++i) {
+            if (own[i].ships.front() == app.fleetWindow->ships().front()) {
+                at = static_cast<int>(i);
+            }
+        }
+    }
+    const int n = static_cast<int>(own.size());
+    const int next = at < 0 ? (step > 0 ? 0 : n - 1) : ((at + step) % n + n) % n;
+    openFleet(app, own[static_cast<std::size_t>(next)]);
+}
+
+// Hegemon's keyboard and gamepad on the map: the pointer jumps to the
+// nearest star in a direction.
+void stepStar(App& app, int dx, int dy) {
+    const int x = app.pointer->x(), y = app.pointer->y();
+    const auto& stars = app.game->galaxy.stars;
+    std::optional<std::size_t> best;
+    long bestScore = 0;
+    for (std::size_t i = 0; i < stars.size(); ++i) {
+        const int sx = app.map->screenX(stars[i].x) - x, sy = app.map->screenY(stars[i].y) - y;
+        const int along = sx * dx + sy * dy;
+        const int across = sx * dy - sy * dx;
+        if (along <= 0) {
+            continue;
+        }
+        const long score = static_cast<long>(along) * along + 4L * across * across;
+        if (!best || score < bestScore) {
+            best = i;
+            bestScore = score;
+        }
+    }
+    if (best) {
+        app.pointer->move(app.map->screenX(stars[*best].x), app.map->screenY(stars[*best].y));
+        if (app.fleetWindow) {
+            app.fleetWindow->hover(app.pointer->x(), app.pointer->y());
+        }
+    }
 }
 
 void makeGalaxy(App& app) {
@@ -435,7 +580,8 @@ void makeGalaxy(App& app) {
             c.layout = static_cast<int>(app.gameRandom->below(hegemon::ColonyScreen::kLayouts));
         }
         updatePanel(app);
-        app.map->setFleets({galaxy.homes.at(0).star});
+        app.banner0 = banners.at(0);
+        updateFleets(app);
         const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
         app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
         app.generating.reset();
@@ -490,6 +636,9 @@ void endTurn(App& app) {
     }
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
+    updateFleets(app);
+    // The window shows the fleet as it was; the original closes it (assumed).
+    app.fleetWindow.reset();
     app.learntTechs = human.learntTechs;
     afterTurn(app);
 }
@@ -932,6 +1081,125 @@ SDL_AppResult researchEvent(App& app, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
+// The fleets on the map: a click on one of the human's opens its window;
+// while it is open a click on a star sends the chosen ships there. Returns
+// whether the event was used.
+bool fleetEvent(App& app, SDL_Event* event) {
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION:
+        if (app.fleetWindow) {
+            app.fleetWindow->hover(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        }
+        return false;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+        if (event->button.button != SDL_BUTTON_LEFT) {
+            return false;
+        }
+        const int x = static_cast<int>(event->button.x), y = static_cast<int>(event->button.y);
+        if (app.fleetWindow && app.fleetWindow->area().contains(x, y)) {
+            app.fleetWindow->press(x, y);
+            return true;
+        }
+        return false;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+        if (event->button.button != SDL_BUTTON_LEFT) {
+            return false;
+        }
+        const int x = static_cast<int>(event->button.x), y = static_cast<int>(event->button.y);
+        if (app.fleetWindow && app.fleetWindow->area().contains(x, y)) {
+            if (app.fleetWindow->release(x, y) == hegemon::FleetWindow::Action::Close) {
+                app.fleetWindow.reset();
+            }
+            return true;
+        }
+        if (const auto fleet = fleetAt(app, x, y)) {
+            openFleet(app, *fleet);
+            return true;
+        }
+        if (app.fleetWindow) {
+            if (const auto star = starAt(app, x, y)) {
+                sendFleet(app, *star);
+                return true;
+            }
+        }
+        return false;
+    }
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_TAB) {
+            nextFleet(app, (event->key.mod & SDL_KMOD_SHIFT) != 0 ? -1 : 1);
+            return true;
+        }
+        if (!app.fleetWindow) {
+            return false;
+        }
+        switch (event->key.key) {
+        case SDLK_ESCAPE:
+            app.fleetWindow.reset();
+            return true;
+        case SDLK_LEFT:
+            stepStar(app, -1, 0);
+            return true;
+        case SDLK_RIGHT:
+            stepStar(app, 1, 0);
+            return true;
+        case SDLK_UP:
+            stepStar(app, 0, -1);
+            return true;
+        case SDLK_DOWN:
+            stepStar(app, 0, 1);
+            return true;
+        case SDLK_SPACE:
+            if (const auto star = starAt(app, app.pointer->x(), app.pointer->y())) {
+                sendFleet(app, *star);
+            }
+            return true;
+        default:
+            return false;
+        }
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+            nextFleet(app, -1);
+            return true;
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            nextFleet(app, 1);
+            return true;
+        default:
+            break;
+        }
+        if (!app.fleetWindow) {
+            return false;
+        }
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            app.fleetWindow.reset();
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            stepStar(app, -1, 0);
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepStar(app, 1, 0);
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+            stepStar(app, 0, -1);
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            stepStar(app, 0, 1);
+            return true;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            if (const auto star = starAt(app, app.pointer->x(), app.pointer->y())) {
+                sendFleet(app, *star);
+            }
+            return true;
+        default:
+            return false;
+        }
+    default:
+        return false;
+    }
+}
+
 // The galaxy map: the home star's name first, then the Turn button (also
 // Enter, or the gamepad's Start); Esc or B goes back to the main menu.
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
@@ -980,6 +1248,9 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
         default:
             return SDL_APP_CONTINUE;
         }
+    }
+    if (fleetEvent(app, event)) {
+        return SDL_APP_CONTINUE;
     }
     const bool turn =
         (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
@@ -1326,7 +1597,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             app->research->tick(elapsed);
             app->research->draw(app->canvas, app->palette);
         } else if (app->map) {
+            // Measured: the dashes move a pixel along every 1/15 second.
+            app->dashTime += elapsed;
+            app->map->setDashStep(static_cast<int>(app->dashTime / 67 % 8));
             app->map->draw(app->canvas, app->palette);
+            if (app->fleetWindow) {
+                app->fleetWindow->draw(app->canvas, app->palette);
+            }
             if (app->homeName) {
                 app->homeName->tick(elapsed);
                 app->homeName->draw(app->canvas);

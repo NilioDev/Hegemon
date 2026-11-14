@@ -92,7 +92,7 @@ HGM_TEST("Galaxy map: the side panel and the fleet at the home star") {
     s.commandPoints = 6;
     s.commandUsed = 3;
     map.setPanel(35000, s);
-    map.setFleets({1});
+    map.setFleets({GalaxyMap::Marker{1}});
     Canvas after(640, 480, 99);
     map.draw(after, palette);
     const auto count = [&](int x0, int y0, int x1, int y1, std::uint8_t colour) {
@@ -148,4 +148,59 @@ HGM_TEST("Galaxy map: the Enter Home Star Name box") {
     HGM_CHECK(box.name() == "Altairs");
     HGM_CHECK(!box.click(10, 10));
     HGM_CHECK(box.click(accept.centerX(), accept.centerY()));
+}
+
+HGM_TEST("Galaxy map: fleets leaving, on their way, and the stars explored") {
+    const fs::path game = HEGEMON_GAMEDATA_DIR;
+    if (!isGameFolder(game)) {
+        HGM_SKIP("original game files not in gamedata/");
+    }
+    GameData data(game);
+    const Galaxy g = medium();
+    GalaxyMap map(data, g, {0});
+    // A fleet at the home star sent to Orion: left of the star (its picture
+    // is 25 wide there, the marker's corner 4 further left and 2 higher than
+    // the picture's).
+    GalaxyMap::Marker leaving{1, 0, 0, 0, 2};
+    const Rect r = map.markerRect(leaving);
+    const Rect orbiting = map.markerRect(GalaxyMap::Marker{1});
+    HGM_CHECK(r.y == orbiting.y - 1 && r.x < orbiting.x - 20);
+    // On its way: centred on its place, "eta 3" under it, the course in
+    // greens to Orion.
+    GalaxyMap::Marker flying{-1, 200, 150, 0, 3};
+    const Rect f = map.markerRect(flying);
+    HGM_CHECK(f.x == map.screenX(200) - 6 && f.y == map.screenY(150) - 5 && f.w == 12 && f.h == 10);
+    map.setFleets({flying});
+    Canvas canvas(640, 480, 99);
+    Palette palette;
+    map.draw(canvas, palette);
+    int red = 0;
+    for (int y = f.y + f.h; y < f.y + f.h + 8; ++y) {
+        for (int x = f.x - 7; x < f.x + 15; ++x) {
+            red += canvas.at(x, y) == 79 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(red > 15);
+    int greens = 0;
+    for (int x = f.x + 20; x < map.screenX(365) - 10; ++x) {
+        for (int y = 100; y < 160; ++y) {
+            const auto c = canvas.at(x, y);
+            greens += c == 110 || c == 111 || c == 114 || c == 116 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(greens > 70);
+    // Orion explored: its name in grey under it.
+    map.setFleets({});
+    std::vector<bool> explored(g.stars.size(), false);
+    explored[0] = true;
+    map.setExplored(explored);
+    Canvas named(640, 480, 99);
+    map.draw(named, palette);
+    int grey = 0;
+    for (int y = 131; y < 160; ++y) {
+        for (int x = 240; x < 290; ++x) {
+            grey += named.at(x, y) == 12 ? 1 : 0;
+        }
+    }
+    HGM_CHECK(grey > 20);
 }

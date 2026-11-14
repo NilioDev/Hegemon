@@ -12,6 +12,7 @@
 #include "hegemon/ui/rect.hpp"
 
 #include <array>
+#include <cstdint>
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -42,8 +43,20 @@ public:
     // What the side panel shows: the stardate (in tenths of a year) and the
     // human's empire.
     void setPanel(int stardate, const EmpireSummary& summary);
-    // The stars where the human has ships.
-    void setFleets(std::vector<int> stars) { fleets_ = std::move(stars); }
+    // A fleet of the human's as the map shows it.
+    struct Marker {
+        int star = -1;        // where it is, -1 while it travels
+        int x = 0, y = 0;     // its place in the galaxy while it travels
+        int destination = -1; // the star it goes to, -1 for none
+        int eta = 0;          // turns to go, written under it on its way
+    };
+    void setFleets(std::vector<Marker> fleets) { fleets_ = std::move(fleets); }
+    // The stars whose names the human knows besides their home's: grey.
+    void setExplored(std::vector<bool> explored) { explored_ = std::move(explored); }
+    // The step of the course lines' moving dashes.
+    void setDashStep(int step) { dashStep_ = step; }
+    // The fleet marker's top left corner on the screen, and its size.
+    Rect markerRect(const Marker& fleet) const;
 
     // Draws the whole screen and sets the colours it is drawn with.
     void draw(Canvas& canvas, Palette& palette) const;
@@ -61,8 +74,13 @@ private:
     std::vector<Image> starSizes_;                 // colour * 3 + size
     Image blackHole_;
     Image fleet_; // the fleet marker at this scale, a frame per banner
-    std::vector<int> fleets_;
+    std::vector<Marker> fleets_;
+    std::vector<bool> explored_;
+    int dashStep_ = 0;
+    void drawCourse(Canvas& canvas, const Marker& fleet) const;
+    void drawName(Canvas& canvas, const Star& s, std::uint8_t dark, std::uint8_t light) const;
     std::string none_; // what the panel shows without a research project
+    std::string eta_;  // under a fleet on its way
     int stardate_ = 35000;
     EmpireSummary summary_;
     bool panel_ = false;
