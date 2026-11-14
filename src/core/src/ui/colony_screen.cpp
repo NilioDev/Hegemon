@@ -62,6 +62,44 @@ void addIcons(std::vector<int>& row, int amount, int unit, int ten) {
     }
 }
 
+// The planets of the system on the left (COLSYSDI.LBX), measured: an
+// arrow at x 6 for each orbit (frame 3 for the colony shown), the planet
+// centred on (22, 38) and on 24 pixels down an orbit, its text in font 1 at
+// x 35, a second line 11 pixels down.
+constexpr const char* kSystemArchive = "COLSYSDI.LBX";
+constexpr std::size_t kFirstPlanetIcon = 6; // + 5 × (climate + 1) + size
+constexpr std::size_t kGasGiantIcon = 61, kAsteroidsIcon = 63, kArrowIcon = 64;
+// The arrow by the colony shown pulses through its frames, one a tick
+// (how fast is assumed; the original's pictures caught frames 1 to 5).
+constexpr int kArrowX = 6, kListY = 31, kOrbitStep = 24, kIconCentreX = 22, kIconCentreY = 38;
+constexpr int kListX = 35, kSecondLine = 11, kListSpacing = 1;
+constexpr std::size_t kListFont = 1;
+// Wider texts are broken at a space (assumed).
+constexpr int kListWidth = 60;
+constexpr std::uint8_t kShownShade1 = 236, kShownShade2 = 238;
+// ESTRINGS.LBX messages.
+// Two lines each: "%s %s- %s\n%s%s" with the size, the climate, the
+// gravity, then the minerals (the last blank is left empty); "%s - %s\n%s%s"
+// with the race, the gravity, then the minerals and the people.
+constexpr std::size_t kPlanetMessage = 44;
+constexpr std::size_t kColonyMessage = 41;
+constexpr std::size_t kPeopleMessage = 8;    // " (%d/%d)"
+constexpr std::size_t kGasGiantMessage = 306, kAsteroidsMessage = 186, kRaceMessage = 645;
+constexpr std::array<std::size_t, 5> kSizeMessages = {502, 604, 605, 606, 607};
+constexpr std::array<std::size_t, 10> kClimateMessages = {539, 719, 720, 721, 722, 399, 501, 184, 723, 303};
+// Ultra poor and ultra rich are shortened; abundant says nothing.
+constexpr std::array<std::size_t, 5> kMineralMessages = {546, 423, 0, 450, 547};
+constexpr std::size_t kLowGravityMessage = 361, kHeavyGravityMessage = 603;
+constexpr std::size_t kLastMessage = 723;
+
+TextStyle listStyle(bool shown) {
+    TextStyle style;
+    style.shades[1] = shown ? kShownShade1 : kShade1;
+    style.shades[2] = style.shades[3] = shown ? kShownShade2 : kShade2;
+    style.spacing = kListSpacing;
+    return style;
+}
+
 void addGap(std::vector<int>& row) {
     if (!row.empty()) {
         row.push_back(ColonyScreen::kGap);
@@ -137,14 +175,87 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
         throw FormatError("too few messages in HESTRNGS.LBX");
     }
     const auto messages = parseStringList(data.archive("ESTRINGS.LBX").entry(0));
-    if (messages.size() <= kPopulationMessage) {
+    if (messages.size() <= kLastMessage) {
         throw FormatError("too few messages in ESTRINGS.LBX");
     }
     title_ = formatMessage(messages[kTitleMessage],
                            {std::string(), planetName(game.galaxy, c.planet, strings[kPrimeText])});
+    planetList(data, game, economy, c, messages);
     population_ = formatMessage(messages[kPopulationMessage],
                                 {static_cast<long long>(c.population()), static_cast<long long>(c.growth),
                                  static_cast<long long>(economy.growth(player, planet, c.population()))});
+}
+
+void ColonyScreen::planetList(GameData& data, const Game& game, const Economy& economy, const Colony& shown,
+                              const std::vector<std::string>& messages) {
+    const Planet& home = game.galaxy.planets.at(static_cast<std::size_t>(shown.planet));
+    const Star& star = game.galaxy.stars.at(static_cast<std::size_t>(home.star));
+    arrow_ = Image::parse(data.archive(kSystemArchive).entry(kArrowIcon));
+    const Font& font = fonts_.font(kListFont);
+    for (std::size_t k = 0; k < kOrbits; ++k) {
+        Orbit& o = orbits_[k];
+        const int index = star.orbits[k];
+        if (index < 0 || static_cast<std::size_t>(index) >= game.galaxy.planets.size()) {
+            continue;
+        }
+        const Planet& planet = game.galaxy.planets[static_cast<std::size_t>(index)];
+        o.shown = index == shown.planet;
+        std::size_t icon = kAsteroidsIcon;
+        std::string text;
+        const std::string gravity = planet.gravity == Gravity::Low     ? messages[kLowGravityMessage]
+                                    : planet.gravity == Gravity::Heavy ? messages[kHeavyGravityMessage]
+                                                                       : std::string();
+        if (planet.type == SatelliteType::AsteroidBelt) {
+            text = messages[kAsteroidsMessage];
+        } else if (planet.type == SatelliteType::GasGiant) {
+            icon = kGasGiantIcon;
+            text = messages[kGasGiantMessage];
+        } else {
+            const auto size = static_cast<std::size_t>(planet.size) % kSizeMessages.size();
+            const auto climate = static_cast<std::size_t>(planet.climate) % kClimateMessages.size();
+            icon = kFirstPlanetIcon + 5 * (climate + 1) + size;
+            const std::size_t mineralsMessage = kMineralMessages[static_cast<std::size_t>(planet.minerals) % 5];
+            const std::string minerals = mineralsMessage == 0 ? std::string() : messages[mineralsMessage];
+            const Colony* colony = nullptr;
+            for (const Colony& c : game.colonies) {
+                if (c.planet == index) {
+                    colony = &c;
+                }
+            }
+            if (colony != nullptr) {
+                const Player& owner = game.players.at(static_cast<std::size_t>(colony->player));
+                const std::string people = formatMessage(messages[kPeopleMessage],
+                                                         {static_cast<long long>(colony->population()),
+                                                          static_cast<long long>(economy.maxPopulation(owner, planet))});
+                text = formatMessage(messages[kColonyMessage],
+                                     {messages[kRaceMessage + static_cast<std::size_t>(owner.race) % 13], gravity,
+                                      minerals, people});
+            } else {
+                text = formatMessage(messages[kPlanetMessage],
+                                     {messages[kSizeMessages[size]], messages[kClimateMessages[climate]], gravity,
+                                      minerals, std::string()});
+            }
+        }
+        if (const auto newline = text.find('\n'); newline != std::string::npos) {
+            o.lines[0] = text.substr(0, newline);
+            o.lines[1] = text.substr(newline + 1);
+        } else {
+            // One line, or two broken at the last space that fits.
+            o.lines[0] = text;
+            for (std::size_t at = text.size(); font.textWidth(o.lines[0], kListSpacing) > kListWidth;) {
+                at = text.rfind(' ', at - 1);
+                if (at == std::string::npos || at == 0) {
+                    o.lines[0] = text;
+                    o.lines[1].clear();
+                    break;
+                }
+                o.lines[0] = text.substr(0, at);
+                o.lines[1] = text.substr(at + 1);
+            }
+        }
+        o.icon = Image::parse(data.archive(kSystemArchive).entry(icon));
+        o.planet = true;
+    }
 }
 
 int ColonyScreen::iconStep(std::size_t places) {
@@ -152,6 +263,13 @@ int ColonyScreen::iconStep(std::size_t places) {
         return kMaxStep;
     }
     return std::min(kMaxStep, kRowWidth / static_cast<int>(places - 1));
+}
+
+void ColonyScreen::tick(std::uint64_t ms) {
+    const std::uint64_t ticks = timer_.advance(ms);
+    if (arrow_.frameCount() > 0) {
+        arrowFrame_ = static_cast<std::size_t>((arrowFrame_ + ticks) % arrow_.frameCount());
+    }
 }
 
 void ColonyScreen::press(int x, int y) {
@@ -173,6 +291,21 @@ void ColonyScreen::draw(Canvas& canvas, Palette& palette) const {
     sky_.draw(0, canvas);
     landscape_.draw(0, canvas);
     frame_.draw(0, canvas);
+
+    const Font& listFont = fonts_.font(kListFont);
+    for (std::size_t k = 0; k < kOrbits; ++k) {
+        const Orbit& o = orbits_[k];
+        const int y = kListY + kOrbitStep * static_cast<int>(k);
+        arrow_.draw(o.shown ? arrowFrame_ : 0, canvas, kArrowX, y);
+        if (!o.planet) {
+            continue;
+        }
+        const int centre = kIconCentreY + kOrbitStep * static_cast<int>(k);
+        o.icon.draw(0, canvas, kIconCentreX - o.icon.width() / 2, centre - o.icon.height() / 2);
+        const TextStyle style = listStyle(o.shown);
+        listFont.draw(canvas, kListX, y, o.lines[0], style);
+        listFont.draw(canvas, kListX, y + kSecondLine, o.lines[1], style);
+    }
 
     for (std::size_t r = 0; r < kRows; ++r) {
         const int step = iconStep(rows_[r].size());

@@ -44,6 +44,35 @@ for the first orbit (measured: Altair Prime). For the others Hegemon
 assumes a Roman number by the orbit (Altair II for the second); one
 measurement of another game showed a home world "Altair II".
 
+## The planets of the system
+
+On the left, one place for each of the star's five orbits, 24 pixels apart
+(measured on all thirteen races' home systems, pixel for pixel but for the
+stars' twinkling):
+
+- An arrow, COLSYSDI.LBX entry 64, at (6, 31) for every orbit, empty ones
+  too. By the colony shown it pulses through the entry's frames (the
+  original's pictures caught frames 1 to 5; one a tick is assumed).
+- The planet's picture, centred on (22, 38): COLSYSDI.LBX entry 6 + 5 ×
+  (climate + 1) + size (climates from toxic 0, sizes from tiny 0), 61 for
+  a gas giant and 63 for an asteroid belt. Its left edge is 22 − w / 2 and
+  its top 38 − h / 2, rounded down.
+- Its text in font 1 with a pixel between letters, at (35, 31), the second
+  line 11 pixels down, in colours 245 and 253; the colony shown in 236 and
+  238 (measured with the red banner). ESTRINGS.LBX:
+  - A planet: message 44, "%s %s- %s\n%s%s": the size (502 T, 604 S, 605
+    M, 606 L, 607 H), the climate (539, 719, 720, 721, 722, 399, 501, 184,
+    723, 303), the gravity (361 LG, 603 HG, nothing for normal), then the
+    minerals (546 U-Poor, 423 Poor, nothing for abundant, 450 Rich, 547
+    U-Rich) and an empty blank. "L Barren-" over "U-Poor".
+  - A colony: message 41, "%s - %s\n%s%s": the race's name (645 +
+    race), the gravity, then the minerals and message 8, " (%d/%d)", the
+    people and the most the planet holds. "Mrrshan -" over "Rich (8/12)".
+  - A gas giant: message 306, "Gas Giant - uninhabitable", broken at a
+    space: "Gas Giant -" over "uninhabitable". Hegemon breaks a line wider
+    than 60 pixels at its last space that fits (assumed).
+  - An asteroid belt: message 186, "Asteroids".
+
 ## The rows at the top
 
 Four rows of COLONY2.LBX icons start at x 128: money at y 32, food at 64,
@@ -92,7 +121,7 @@ the frame too and do nothing yet.
 
 ## Still to do
 
-The planets of the system on the left, the ship at the end of the
+Choosing another planet of the system, the ship at the end of the
 production row, moving people between jobs, the buildings and roads in the
 landscape, the build queue with Change and Buy, Leaders, the ships in the
 sky, the marines at the bottom left, the stars' twinkling and what the
