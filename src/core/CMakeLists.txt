@@ -22,6 +22,7 @@ add_library(hgm_core STATIC
     src/ui/colonize_box.cpp
     src/ui/landing_screen.cpp
     src/rules/races.cpp
+    src/rules/savegame.cpp
     src/data/lbx.cpp
     src/data/image.cpp
     src/data/font.cpp

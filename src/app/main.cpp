@@ -22,6 +22,7 @@
 #include "hegemon/rules/fleet.hpp"
 #include "hegemon/rules/galaxy_generator.hpp"
 #include "hegemon/rules/random.hpp"
+#include "hegemon/rules/savegame.hpp"
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colony_screen.hpp"
@@ -40,6 +41,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
@@ -136,6 +139,8 @@ void openNewGame(App& app) {
 }
 
 // What a choice in the main menu does.
+void continueGame(App& app);
+
 SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
     using Choice = hegemon::MainMenu::Choice;
     if (choice == Choice::Quit) {
@@ -143,6 +148,10 @@ SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
     }
     if (choice == Choice::NewGame) {
         openNewGame(app);
+        return SDL_APP_CONTINUE;
+    }
+    if (choice == Choice::Continue) {
+        continueGame(app);
         return SDL_APP_CONTINUE;
     }
     SDL_Log("This part of the game is not there yet.");
@@ -551,6 +560,53 @@ void stepStar(App& app, int dx, int dy) {
     }
 }
 
+// The galaxy map of a game just begun or loaded. Throws when a file is
+// damaged.
+void startPlaying(App& app, std::unique_ptr<hegemon::Game> game) {
+    app.game = std::move(game);
+    std::vector<std::size_t> banners;
+    for (const hegemon::Player& p : app.game->players) {
+        banners.push_back(p.banner);
+    }
+    app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, app.game->galaxy, banners);
+    app.tree = std::make_unique<hegemon::TechTree>(app.data->parameters());
+    app.gameRandom = std::make_unique<hegemon::Random>(app.random());
+    // Hegemon's choice: the original keeps no layout in the saved game.
+    for (hegemon::Colony& c : app.game->colonies) {
+        c.layout = static_cast<int>(app.gameRandom->below(hegemon::ColonyScreen::kLayouts));
+    }
+    updatePanel(app);
+    app.banner0 = banners.at(0);
+    updateFleets(app);
+    app.generating.reset();
+    app.banners.reset();
+    app.rulerName.reset();
+    app.raceSelect.reset();
+    app.pointer->usePicture(hegemon::Pointer::kUsual);
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+}
+
+// Continue: the game the original saved at the start of the last turn.
+void continueGame(App& app) {
+    try {
+        const auto path = hegemon::findFileNoCase(app.data->folder(), "SAVE10.GAM");
+        if (!path) {
+            return;
+        }
+        std::ifstream in(*path, std::ios::binary);
+        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (bytes.size() > hegemon::kSavegameSize) {
+            throw hegemon::FormatError("SAVE10.GAM is too big");
+        }
+        const hegemon::TechTree tree(app.data->parameters());
+        auto saved = hegemon::readSavegame(bytes, app.data->parameters(), tree);
+        startPlaying(app, std::make_unique<hegemon::Game>(std::move(saved.game)));
+    } catch (const std::exception& e) {
+        SDL_Log("The saved game could not be loaded: %s", e.what());
+        backToMainMenu(app);
+    }
+}
+
 void makeGalaxy(App& app) {
     try {
         hegemon::GalaxySettings settings;
@@ -589,27 +645,12 @@ void makeGalaxy(App& app) {
         for (const auto& p : settings.players) {
             picks.push_back(p.picks);
         }
-        app.game = std::make_unique<hegemon::Game>(
-            hegemon::startGame(app.data->parameters(), generator.generate(settings, random), picks, banners,
-                               random.next()));
+        startPlaying(app, std::make_unique<hegemon::Game>(hegemon::startGame(
+                              app.data->parameters(), generator.generate(settings, random), picks, banners,
+                              random.next())));
         const hegemon::Galaxy& galaxy = app.game->galaxy;
-        app.map = std::make_unique<hegemon::GalaxyMap>(*app.data, galaxy, banners);
-        app.tree = std::make_unique<hegemon::TechTree>(app.data->parameters());
-        app.gameRandom = std::make_unique<hegemon::Random>(app.random());
-        for (hegemon::Colony& c : app.game->colonies) {
-            c.layout = static_cast<int>(app.gameRandom->below(hegemon::ColonyScreen::kLayouts));
-        }
-        updatePanel(app);
-        app.banner0 = banners.at(0);
-        updateFleets(app);
         const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
         app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
-        app.generating.reset();
-        app.banners.reset();
-        app.rulerName.reset();
-        app.raceSelect.reset();
-        app.pointer->usePicture(hegemon::Pointer::kUsual);
-        app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
         SDL_StartTextInput(app.window);
     } catch (const std::exception& e) {
         SDL_Log("The galaxy could not be made: %s", e.what());

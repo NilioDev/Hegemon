@@ -56,8 +56,12 @@ gamepad, mouse, keyboard and touch controls.
 > the galaxy map goes back to the main
 > menu. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
-> light up under the mouse or the gamepad. Quit Game closes Hegemon; Continue, Load Game,
-> Multi Player and Hall of Fame don't lead anywhere yet.
+> light up under the mouse or the gamepad. Continue picks up the original's
+> autosave (`SAVE10.GAM` in your game folder): the galaxy, the empires
+> with their technology, research, money and ship designs, the colonies
+> with their people, buildings and build lists, and the ships, also those
+> on their way. Quit Game closes Hegemon; Load Game, Multi Player and Hall
+> of Fame don't lead anywhere yet.
 
 Hegemon is not affiliated with or endorsed by the makers of the original
 game. It contains none of the original game's files: you need your own copy.
