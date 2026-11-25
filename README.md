@@ -60,6 +60,9 @@ gamepad, mouse, keyboard and touch controls.
 > lists the planets of the stars you explored that nobody lives on, with
 > their climate, gravity, minerals and size, sorted and filtered as in the
 > original: a click on one sends your nearest colony or outpost ship there.
+> The computer players research, put their people to work, build, send out
+> their scouts and settle new planets with their colony ships, as seen in
+> the original; their warships, diplomacy and combat are still to come.
 > The FLEETS button shows your fleets one at a time on the Fleet Operations
 > screen, with their ships in a grid, a small map, and for the ship you
 > click its crew, shield, beam attack and defense, weapons and specials (or

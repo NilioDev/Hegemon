@@ -26,6 +26,7 @@ add_executable(hgm_tests
     test_colonies_screen.cpp
     test_planets_screen.cpp
     test_fleets_screen.cpp
+    test_computer_players.cpp
     test_colony_screen.cpp
     test_build_list.cpp
     test_buy.cpp

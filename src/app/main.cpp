@@ -1529,13 +1529,31 @@ void endTurn(App& app) {
         return;
     }
     const std::vector<bool> explored = human.explored;
+    // The computer players' colony ships leave the list of ships when they
+    // land, so the fleet window's first ship is found again by how many of
+    // the human's ships come before it.
+    std::optional<std::size_t> shownRank;
+    if (app.fleetWindow && !app.fleetWindow->ships().empty()) {
+        const std::size_t first = app.fleetWindow->ships().front();
+        shownRank = static_cast<std::size_t>(
+            std::count_if(app.game->ships.begin(),
+                          app.game->ships.begin() + static_cast<std::ptrdiff_t>(std::min(first, app.game->ships.size())),
+                          [](const hegemon::Ship& s) { return s.player == 0; }));
+    }
     hegemon::endTurn(*app.game, app.data->parameters(), *app.tree, *app.gameRandom);
     updatePanel(app);
     updateFleets(app);
     // Measured: the fleet window stays open, showing the fleet where it is
     // now.
-    if (app.fleetWindow && !app.fleetWindow->ships().empty()) {
-        const std::size_t first = app.fleetWindow->ships().front();
+    std::optional<std::size_t> shownShip;
+    for (std::size_t i = 0, rank = 0; shownRank && i < app.game->ships.size(); ++i) {
+        if (app.game->ships[i].player == 0 && rank++ == *shownRank) {
+            shownShip = i;
+            break;
+        }
+    }
+    if (app.fleetWindow && shownShip) {
+        const std::size_t first = *shownShip;
         for (const hegemon::Fleet& f : hegemon::fleets(*app.game)) {
             if (std::find(f.ships.begin(), f.ships.end(), first) != f.ships.end()) {
                 openFleet(app, f);
