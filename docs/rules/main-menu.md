@@ -115,6 +115,10 @@ mod.
 Measured with no savegames (both greyed out), with only `SAVE10.GAM`
 (Continue usable) and with only `SAVE3.GAM` (Load Game usable).
 
+Continue loads `SAVE10.GAM` (see [the saved games](../formats/savegame.md))
+and shows the galaxy map. When the file can't be read, Hegemon stays at
+the main menu.
+
 ## The pointer
 
 A button that can be used is drawn highlighted while the mouse pointer is
