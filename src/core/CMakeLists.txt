@@ -12,6 +12,7 @@ add_library(hgm_core STATIC
     src/ui/galaxy_map.cpp
     src/ui/research_done.cpp
     src/ui/research_select.cpp
+    src/ui/colonies_screen.cpp
     src/ui/colony_screen.cpp
     src/ui/build_list.cpp
     src/ui/message_box.cpp

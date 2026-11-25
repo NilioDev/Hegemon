@@ -26,6 +26,7 @@
 #include "hegemon/rules/savegame.hpp"
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/build_list.hpp"
+#include "hegemon/ui/colonies_screen.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/fleet_window.hpp"
 #include "hegemon/ui/system_window.hpp"
@@ -88,7 +89,9 @@ struct App {
     bool researchEndsTurn = false; // choosing there goes on to end the turn
     std::unique_ptr<hegemon::ResearchDoneScreen> researchDone; // a field finished, after the turn
     std::vector<int> learntTechs;                               // still to be shown on it
-    std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map
+    std::unique_ptr<hegemon::ColoniesScreen> colonies;        // the Colonies screen, over the map
+    bool buildFromList = false; // the build list was opened from the Colonies screen
+    std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map or the Colonies screen
     std::size_t colonyIndex = 0;                              // the colony it shows
     std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
     std::unique_ptr<hegemon::MessageBox> message;             // what Buy says, over the colony screen
@@ -409,6 +412,8 @@ void backToMainMenu(App& app) {
     app.starName.reset();
     app.buildList.reset();
     app.colony.reset();
+    app.colonies.reset();
+    app.buildFromList = false;
     app.message.reset();
     app.research.reset();
     app.researchDone.reset();
@@ -1581,8 +1586,16 @@ void afterTurn(App& app) {
     }
 }
 
+void refreshColonies(App& app);
+
 void leaveColony(App& app) {
     app.colony.reset();
+    if (app.colonies) {
+        // Measured: back to the Colonies screen it was opened from.
+        refreshColonies(app);
+        app.pointer->useEntry(hegemon::ColoniesScreen::kPointerEntry);
+        return;
+    }
     app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
     if (app.inTurn) {
         continueTurn(app);
@@ -1602,6 +1615,10 @@ void openBuildList(App& app) {
 
 // The colony screen shows what the colony builds now.
 void refreshColony(App& app) {
+    refreshColonies(app);
+    if (!app.colony) {
+        return;
+    }
     const std::size_t cursor = app.colony ? app.colony->cursorRow() : 0;
     try {
         app.colony = std::make_unique<hegemon::ColonyScreen>(
@@ -1619,6 +1636,12 @@ void closeBuildList(App& app, bool keep) {
         refreshColony(app);
     }
     app.buildList.reset();
+    if (app.buildFromList) {
+        // Measured: back to the Colonies screen.
+        app.buildFromList = false;
+        app.colony.reset();
+        refreshColonies(app);
+    }
 }
 
 // Buy: asks whether to spend the price, or says why it can't; a second Buy
@@ -1640,7 +1663,10 @@ void startBuy(App& app) {
         app.message = std::make_unique<hegemon::MessageBox>(
             *app.data, app.purchase.kind == Kind::Offer ? hegemon::MessageBox::Kind::Question
                                                         : hegemon::MessageBox::Kind::Message,
-            app.colony->buyText(app.purchase));
+            app.colony ? app.colony->buyText(app.purchase)
+                       : hegemon::ColonyScreen(*app.data, *app.game, hegemon::Economy(app.data->parameters()),
+                                               app.colonyIndex)
+                             .buyText(app.purchase));
     } catch (const hegemon::FormatError& e) {
         SDL_Log("The message could not be read: %s", e.what());
     }
@@ -1893,6 +1919,188 @@ void chooseResearch(App& app, int field) {
     }
 }
 
+// The Colonies screen, opened by the COLONIES button under the map (also
+// C, or the gamepad's X).
+constexpr hegemon::Rect kColoniesButton = {6, 436, 78, 38};
+
+void openColonies(App& app) {
+    try {
+        app.colonies = std::make_unique<hegemon::ColoniesScreen>(*app.data, *app.game,
+                                                                 hegemon::Economy(app.data->parameters()), 0);
+        app.colonies->pointerMoved(app.pointer->x(), app.pointer->y());
+        app.fleetWindow.reset();
+        app.pointer->useEntry(hegemon::ColoniesScreen::kPointerEntry);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The Colonies screen could not be read: %s", e.what());
+    }
+}
+
+void closeColonies(App& app) {
+    app.colonies.reset();
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+}
+
+// Shows the colonies as they are now, in the same order and place.
+void refreshColonies(App& app) {
+    if (!app.colonies) {
+        return;
+    }
+    const auto sort = app.colonies->sort();
+    const auto top = app.colonies->top();
+    try {
+        auto fresh = std::make_unique<hegemon::ColoniesScreen>(*app.data, *app.game,
+                                                               hegemon::Economy(app.data->parameters()), 0);
+        fresh->setSort(sort);
+        fresh->scroll(static_cast<int>(top));
+        fresh->pointerMoved(app.pointer->x(), app.pointer->y());
+        app.colonies = std::move(fresh);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The Colonies screen could not be read: %s", e.what());
+    }
+}
+
+void coloniesAction(App& app, hegemon::ColoniesScreen::Action action) {
+    using Kind = hegemon::ColoniesScreen::Action::Kind;
+    switch (action.kind) {
+    case Kind::Return:
+        closeColonies(app);
+        break;
+    case Kind::Open:
+        try {
+            app.colony = std::make_unique<hegemon::ColonyScreen>(
+                *app.data, *app.game, hegemon::Economy(app.data->parameters()), action.colony);
+            app.colonyIndex = action.colony;
+        } catch (const hegemon::FormatError& e) {
+            SDL_Log("The colony screen could not be read: %s", e.what());
+        }
+        break;
+    case Kind::Build:
+        // The build list shows the colony's landscape behind it.
+        try {
+            app.colony = std::make_unique<hegemon::ColonyScreen>(
+                *app.data, *app.game, hegemon::Economy(app.data->parameters()), action.colony);
+            app.colonyIndex = action.colony;
+            app.buildFromList = true;
+            openBuildList(app);
+            if (!app.buildList) {
+                app.buildFromList = false;
+                app.colony.reset();
+            }
+        } catch (const hegemon::FormatError& e) {
+            SDL_Log("The colony screen could not be read: %s", e.what());
+        }
+        break;
+    case Kind::Buy:
+        app.colonyIndex = action.colony;
+        startBuy(app);
+        break;
+    case Kind::Jobs:
+        app.game->colonies.at(action.colony).jobs = app.colonies->jobs(action.colony);
+        refreshColonies(app);
+        updatePanel(app);
+        break;
+    case Kind::None:
+        break;
+    }
+}
+
+// Hegemon's keyboard and gamepad: the pointer steps over the rows and the
+// buttons, and clicks where it is.
+void stepColonies(App& app, int dx, int dy) {
+    const auto [x, y] = app.colonies->step(app.pointer->x(), app.pointer->y(), dx, dy);
+    app.pointer->move(x, y);
+    app.colonies->pointerMoved(x, y);
+}
+
+void clickColonies(App& app) {
+    const int x = app.pointer->x(), y = app.pointer->y();
+    app.colonies->press(x, y);
+    coloniesAction(app, app.colonies->release(x, y));
+}
+
+void scrollColonies(App& app, int rows) {
+    app.colonies->scroll(rows);
+    app.colonies->pointerMoved(app.pointer->x(), app.pointer->y());
+}
+
+SDL_AppResult coloniesEvent(App& app, SDL_Event* event) {
+    if (app.message) {
+        return messageEvent(app, event);
+    }
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            app.colonies->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_MOTION:
+        app.colonies->pointerMoved(static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            coloniesAction(app, app.colonies->release(static_cast<int>(event->button.x),
+                                                      static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        scrollColonies(app, event->wheel.y > 0 ? -1 : 1);
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_ESCAPE:
+            closeColonies(app);
+            break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_SPACE:
+            clickColonies(app);
+            break;
+        case SDLK_UP:
+        case SDLK_DOWN:
+            stepColonies(app, 0, event->key.key == SDLK_UP ? -1 : 1);
+            break;
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            stepColonies(app, event->key.key == SDLK_LEFT ? -1 : 1, 0);
+            break;
+        case SDLK_PAGEUP:
+        case SDLK_PAGEDOWN:
+            scrollColonies(app, event->key.key == SDLK_PAGEUP ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            closeColonies(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            clickColonies(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            stepColonies(app, 0, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepColonies(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? -1 : 1, 0);
+            break;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            scrollColonies(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
 // The research done screen goes at a click, a key or a gamepad button
 // (assumed).
 SDL_AppResult researchDoneEvent(App& app, SDL_Event* event) {
@@ -2136,6 +2344,9 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (app.colony) {
         return colonyEvent(app, event);
     }
+    if (app.colonies) {
+        return coloniesEvent(app, event);
+    }
     if (app.homeName) {
         auto& box = *app.homeName;
         switch (event->type) {
@@ -2187,6 +2398,15 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (game) {
         // The original's Esc does nothing here; Hegemon's opens the menu.
         openGameMenu(app);
+        return SDL_APP_CONTINUE;
+    }
+    const bool colonies =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
+         kColoniesButton.contains(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) ||
+        (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_C) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_WEST);
+    if (colonies) {
+        openColonies(app);
         return SDL_APP_CONTINUE;
     }
     const bool turn =
@@ -2529,6 +2749,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         } else if (app->colony) {
             app->colony->tick(elapsed);
             app->colony->draw(app->canvas, app->palette);
+            if (app->message) {
+                app->message->draw(app->canvas, app->palette);
+            }
+        } else if (app->colonies) {
+            app->colonies->draw(app->canvas, app->palette);
             if (app->message) {
                 app->message->draw(app->canvas, app->palette);
             }
