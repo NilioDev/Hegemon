@@ -59,6 +59,9 @@ struct Ship {
     int destination = -1; // the star it was sent to, -1 for none
     int x = 0, y = 0;     // its place on the map while it travels
     int speed = 0;        // parsecs a turn on its way, its fleet's slowest
+    // The planet the Planets screen sent a colony or outpost ship to, -1
+    // for none. Hegemon doesn't save it yet.
+    int landOn = -1;
 };
 
 struct Player {

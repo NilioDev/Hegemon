@@ -48,7 +48,7 @@ MapPoint shipPlace(const Game& game, const Ship& ship);
 // The distance the original goes by: the whole part of the straight line.
 int mapDistance(MapPoint from, MapPoint to);
 // The turns it takes to go from one place to another at `speed` parsecs a
-// turn (the fleet window's ETA): at least one.
+// turn (the fleet window's ETA): at least one, 0 when it is there already.
 int travelTurns(MapPoint from, MapPoint to, int speed);
 // One turn's way towards `to`: there if it is no further than `step` map
 // units, otherwise each coordinate goes its share of the step, rounded up.
