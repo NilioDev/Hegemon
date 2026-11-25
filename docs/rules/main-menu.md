@@ -115,9 +115,10 @@ mod.
 Measured with no savegames (both greyed out), with only `SAVE10.GAM`
 (Continue usable) and with only `SAVE3.GAM` (Load Game usable).
 
-Continue loads `SAVE10.GAM` (see [the saved games](../formats/savegame.md))
-and shows the galaxy map. When the file can't be read, Hegemon stays at
-the main menu.
+Continue loads the saved game changed last, the autosave or another (see
+[the saved games](../formats/savegame.md)), and shows the galaxy map. When
+the file can't be read, Hegemon stays at the main menu. Load Game opens the
+Load Game window (see [saved games](saved-games.md)).
 
 ## The pointer
 
@@ -155,6 +156,4 @@ A or Enter takes it. This uses the original's own highlighted pictures.
   credits wait 28 ticks when the menu comes back.
 - Entry 22, a second animation of 50 frames, probably played when the menu
   closes.
-- What Continue, Load Game, Multi Player and Hall of Fame lead to. New Game
-  opens the New Game screen (see [new-game.md](new-game.md)) and Quit Game
-  closes Hegemon.
+- What Multi Player and Hall of Fame lead to.

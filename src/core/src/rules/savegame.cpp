@@ -444,4 +444,14 @@ SavedGame readSavegame(std::span<const std::uint8_t> bytes, const Parameters& pa
     return SaveReader(bytes, parameters, tree).read();
 }
 
+SavegameSummary readSavegameSummary(std::span<const std::uint8_t> bytes) {
+    Reader r(bytes);
+    if (bytes.size() != kSavegameSize || r.u32() != kVersion) {
+        throw FormatError("not a saved game of fan patch 1.51");
+    }
+    r.seek(kStardate);
+    const int stardate = r.u16();
+    return {text(bytes.subspan(kName, kNameLength)), stardate};
+}
+
 } // namespace hegemon
