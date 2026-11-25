@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hegemon/rules/empire.hpp"
 
+#include "hegemon/rules/combat.hpp"
 #include "hegemon/rules/computer_players.hpp"
 
 #include "hegemon/rules/fleet.hpp"
@@ -441,6 +442,9 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     // Measured: ships sent off this turn go a turn's way; those built now
     // stay at their colony's star (assumed).
     moveShips(game);
+    // Measured: ships that arrive at a monster's system fight it before
+    // anything else happens there.
+    game.battles = fightMonsters(game, parameters, random);
     // Seen: a computer player's colony ship settles in the turn it arrives.
     landComputerColonyShips(game, parameters);
     // Measured: a ship's crew has 1 EP after the first turn.

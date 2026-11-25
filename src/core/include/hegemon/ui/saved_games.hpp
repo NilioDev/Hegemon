@@ -101,6 +101,11 @@ private:
 class WarningBox {
 public:
     WarningBox(GameData& data, std::string text);
+    // The galaxy map's message of an attack, "A Space Hydra attacks Alkari
+    // at the Ell system": the same box, the text in red, wrapped to lines.
+    static WarningBox attack(GameData& data, std::string text);
+
+    const std::vector<std::string>& lines() const { return lines_; }
 
     const std::string& text() const { return text_; }
     // Lets time pass for the lights.
@@ -111,6 +116,8 @@ private:
     Image box_;
     FontSet fonts_;
     std::string text_;
+    std::vector<std::string> lines_;
+    std::array<std::uint8_t, 3> shades_{};
     std::uint64_t micros_ = 0;
 };
 

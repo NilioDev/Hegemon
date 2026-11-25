@@ -90,12 +90,24 @@ struct Player {
     std::vector<bool> explored;
 };
 
+// What the human is told about a battle: "A Space Hydra attacks Alkari at
+// the Ell system".
+struct BattleReport {
+    int star = 0;
+    MonsterKind monster = MonsterKind::Hydra;
+    int player = 0;      // the player attacked
+    int planet = -1;     // its colony there, -1 for none
+    int shipsLost = 0;   // of the player
+};
+
 struct Game {
     Galaxy galaxy;
     std::vector<Player> players; // the human first
     std::vector<Colony> colonies;
     std::vector<Ship> ships;
     int stardate = 35000; // in tenths of a year
+    // The battles of the last turn, the human's first (not saved).
+    std::vector<BattleReport> battles;
 };
 
 // What a colony makes in a turn. Food and money are in halves, as the

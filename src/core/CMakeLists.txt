@@ -39,6 +39,7 @@ add_library(hgm_core STATIC
     src/rules/random.cpp
     src/rules/galaxy_generator.cpp
     src/rules/empire.cpp
+    src/rules/combat.cpp
     src/rules/computer_players.cpp
     src/rules/tech.cpp
     src/rules/ship_design.cpp
