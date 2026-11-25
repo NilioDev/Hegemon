@@ -67,6 +67,9 @@ public:
 
     // How far apart a row's icons are drawn.
     static int iconStep(std::size_t places);
+    // The rows for what a colony makes, also drawn smaller in the Colonies
+    // screen: entries counted from the first icon, a unit of food.
+    static std::array<std::vector<int>, kRows> iconRows(const ColonyOutput& out);
 
     // The mouse: what a button let go over does.
     // Jobs: people were moved to another job; jobs() tells the new numbers.

@@ -206,41 +206,7 @@ ColonyScreen::ColonyScreen(GameData& data, const Game& game, const Economy& econ
     }
     government_ = std::clamp(static_cast<int>(player.picks[RacePicks::Government]), 0, kIcons - 1 - kGovernmentIcon);
 
-    // Measured over the thirteen races' home colonies; see
-    // docs/rules/colony-screen.md.
-    const ColonyOutput out = economy.output(game, c);
-    auto& money = rows_[Money];
-    addIcons(money, out.maintenance2 / 2, kMoney, kMoney + kTen);
-    addGap(money);
-    // Halves round up, as on the galaxy map.
-    if (out.income2 >= 0) {
-        addIcons(money, (out.income2 + 1) / 2, kMoney, kMoney + kTen);
-    } else {
-        addIcons(money, -out.income2 / 2, kMissingMoney, kMissingMoney10);
-    }
-    if (!money.empty() && money.back() == kGap) {
-        money.pop_back();
-    }
-    auto& food = rows_[Food];
-    const int grown = out.food2 / 2, eaten = out.eaten2 / 2;
-    addIcons(food, std::min(grown, eaten), kFood, kFood + kTen);
-    addIcons(food, eaten - std::min(grown, eaten), kMissingFood, kMissingFood10);
-    if (out.upkeep > 0) {
-        // A cybernetic race eats production too; a place is left after it
-        // even when nothing is left over (measured on the Meklars).
-        addIcons(food, out.upkeep, kProduction, kProduction + kTen);
-        food.push_back(kGap);
-    }
-    if (grown > eaten) {
-        if (food.empty() || food.back() != kGap) {
-            addGap(food);
-        }
-        addIcons(food, grown - eaten, kFood, kFood + kTen);
-    }
-    auto& production = rows_[Production];
-    addIcons(production, std::max(0, out.production - out.upkeep), kProduction, kProduction + kTen);
-    addIcons(production, out.pollution, kPollution, kPollution10);
-    addIcons(rows_[Research], out.research, kResearch, kResearch + kTen);
+    rows_ = iconRows(economy.output(game, c));
     const auto colours = data.archive("FONTS.LBX").entry(kPointerEntry);
     if (colours.size() < 1024) {
         throw FormatError("FONTS.LBX: the colony screen's colours are missing");
@@ -402,6 +368,45 @@ void ColonyScreen::planetList(GameData& data, const Game& game, const Economy& e
         o.icon = Image::parse(data.archive(kSystemArchive).entry(icon));
         o.planet = true;
     }
+}
+
+// Measured over the thirteen races' home colonies; see
+// docs/rules/colony-screen.md.
+std::array<std::vector<int>, ColonyScreen::kRows> ColonyScreen::iconRows(const ColonyOutput& out) {
+    std::array<std::vector<int>, kRows> rows;
+    auto& money = rows[Money];
+    addIcons(money, out.maintenance2 / 2, kMoney, kMoney + kTen);
+    addGap(money);
+    // Halves round up, as on the galaxy map.
+    if (out.income2 >= 0) {
+        addIcons(money, (out.income2 + 1) / 2, kMoney, kMoney + kTen);
+    } else {
+        addIcons(money, -out.income2 / 2, kMissingMoney, kMissingMoney10);
+    }
+    if (!money.empty() && money.back() == kGap) {
+        money.pop_back();
+    }
+    auto& food = rows[Food];
+    const int grown = out.food2 / 2, eaten = out.eaten2 / 2;
+    addIcons(food, std::min(grown, eaten), kFood, kFood + kTen);
+    addIcons(food, eaten - std::min(grown, eaten), kMissingFood, kMissingFood10);
+    if (out.upkeep > 0) {
+        // A cybernetic race eats production too; a place is left after it
+        // even when nothing is left over (measured on the Meklars).
+        addIcons(food, out.upkeep, kProduction, kProduction + kTen);
+        food.push_back(kGap);
+    }
+    if (grown > eaten) {
+        if (food.empty() || food.back() != kGap) {
+            addGap(food);
+        }
+        addIcons(food, grown - eaten, kFood, kFood + kTen);
+    }
+    auto& production = rows[Production];
+    addIcons(production, std::max(0, out.production - out.upkeep), kProduction, kProduction + kTen);
+    addIcons(production, out.pollution, kPollution, kPollution10);
+    addIcons(rows[Research], out.research, kResearch, kResearch + kTen);
+    return rows;
 }
 
 int ColonyScreen::iconStep(std::size_t places) {
