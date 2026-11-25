@@ -56,7 +56,11 @@ gamepad, mouse, keyboard and touch controls.
 > button under the map lists your colonies with their people and what they
 > build, with a small map of the galaxy and your empire's totals: click a
 > name for its colony screen, what it builds for its build list, the round
-> button to buy it, or a sort button to sort the list. The GAME
+> button to buy it, or a sort button to sort the list. The PLANETS button
+> lists the planets of the stars you explored that nobody lives on, with
+> their climate, gravity, minerals and size, sorted and filtered as in the
+> original: a click on one sends your nearest colony or outpost ship there.
+> The GAME
 > button above the galaxy map (or Esc, or the gamepad's Back) opens the
 > game menu: Save Game saves in one of nine slots (click a slot, type a
 > name, Enter), Load Game loads another game, New Game and Quit Game ask
@@ -127,6 +131,8 @@ what is missing.
 | Leave the build list | OK keeps it, Cancel doesn't | Enter keeps it, Esc doesn't | Start keeps it, B doesn't |
 | Open the Colonies screen | COLONIES under the map | C | X |
 | Use the Colonies screen | Click a name, what it builds, the round button or a sort button | Arrow keys, then Enter; Page Up / Page Down scroll; Esc goes back | D-pad, then A; LB / RB scroll; B goes back |
+| Open the Planets screen | PLANETS under the map | P | Y |
+| Send a colony or outpost ship from the Planets screen | Choose Send Colony Ship or Send Outpost Ship, then click a planet | Arrow keys, then Enter; Esc goes back | D-pad, then A; B goes back |
 | Open a fleet's window | Click the fleet | Tab (Shift+Tab goes back) | RB (LB goes back) |
 | Choose which ships of the fleet go | Click their boxes, or All | | |
 | Send the fleet to a star | Click the star | Arrow keys to the star, then Space | D-pad to the star, then A |

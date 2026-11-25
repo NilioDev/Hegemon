@@ -76,6 +76,10 @@ int mapDistance(MapPoint from, MapPoint to) {
 }
 
 int travelTurns(MapPoint from, MapPoint to, int speed) {
+    // Measured (the Planets screen): a ship already there takes 0 turns.
+    if (from == to) {
+        return 0;
+    }
     const int step = std::max(1, speed) * kParsec;
     return std::max(1, static_cast<int>(dividedUp(mapDistance(from, to), step)));
 }

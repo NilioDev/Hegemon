@@ -63,8 +63,9 @@ what is left and, in brackets, the total.
 ## Population
 
 How many of a race's people a planet holds: `pop_max` of its size times
-`pop_climate` of its climate in percent (an aquatic race counts an ocean
-world as gaia), then `pop_bonus_tolerant` percent more for a tolerant race
+`pop_climate` of its climate in percent, rounded (measured: a medium
+radiated planet, 15 × 25%, holds 4; to the nearest is assumed). An aquatic
+race counts an ocean world as gaia. Then `pop_bonus_tolerant` percent more for a tolerant race
 and `pop_bonus_subterranean` of the size more for a subterranean one.
 
 A colony grows each turn by the fan patch's formula: the square root of

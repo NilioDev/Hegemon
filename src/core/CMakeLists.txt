@@ -5,6 +5,7 @@ add_library(hgm_core STATIC
     src/game_data.cpp
     src/ui/main_menu.cpp
     src/ui/new_game.cpp
+    src/ui/planets_screen.cpp
     src/ui/pointer.cpp
     src/ui/race_select.cpp
     src/ui/ruler_name.cpp

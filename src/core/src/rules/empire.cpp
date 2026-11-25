@@ -155,8 +155,12 @@ int Economy::maxPopulation(const Player& player, const Planet& planet) const {
         climate = Climate::Gaia;
     }
     const auto size = kSizeNames[static_cast<std::size_t>(planet.size)];
-    int most = static_cast<int>(p_.integer("pop_max", {}, size) *
-                                p_.integer("pop_climate", {}, kClimateNames[static_cast<std::size_t>(climate)]) / 100);
+    // Measured: a medium radiated planet (15 × 25%, 3.75) holds 4, so the
+    // share is rounded (to the nearest, assumed; not down).
+    int most = static_cast<int>((p_.integer("pop_max", {}, size) *
+                                     p_.integer("pop_climate", {}, kClimateNames[static_cast<std::size_t>(climate)]) +
+                                 50) /
+                                100);
     if (player.picks[RacePicks::Tolerant] != 0) {
         most = most * (100 + static_cast<int>(p_.integer("pop_bonus_tolerant"))) / 100;
     }

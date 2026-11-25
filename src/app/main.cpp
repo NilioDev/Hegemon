@@ -27,6 +27,7 @@
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colonies_screen.hpp"
+#include "hegemon/ui/planets_screen.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/fleet_window.hpp"
 #include "hegemon/ui/system_window.hpp"
@@ -91,6 +92,10 @@ struct App {
     std::vector<int> learntTechs;                               // still to be shown on it
     std::unique_ptr<hegemon::ColoniesScreen> colonies;        // the Colonies screen, over the map
     bool buildFromList = false; // the build list was opened from the Colonies screen
+    std::unique_ptr<hegemon::PlanetsScreen> planets;          // the Planets screen, over the map
+    std::unique_ptr<hegemon::MessageBox> planetMessage;       // what sending a ship says, over it
+    hegemon::PlanetsScreen::Action planetSend;                // a ship to send once asked
+    int sentPlanet = -1;                                      // its mark shows when the message closes
     std::unique_ptr<hegemon::ColonyScreen> colony;            // over the map or the Colonies screen
     std::size_t colonyIndex = 0;                              // the colony it shows
     std::unique_ptr<hegemon::BuildListScreen> buildList;      // over the colony screen
@@ -414,6 +419,8 @@ void backToMainMenu(App& app) {
     app.colony.reset();
     app.colonies.reset();
     app.buildFromList = false;
+    app.planets.reset();
+    app.planetMessage.reset();
     app.message.reset();
     app.research.reset();
     app.researchDone.reset();
@@ -2101,6 +2108,223 @@ SDL_AppResult coloniesEvent(App& app, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
+// The Planets screen, opened by the PLANETS button under the map (also P,
+// or the gamepad's Y).
+constexpr hegemon::Rect kPlanetsButton = {86, 436, 76, 38};
+
+void openPlanets(App& app) {
+    try {
+        app.planets = std::make_unique<hegemon::PlanetsScreen>(*app.data, *app.game,
+                                                               hegemon::Economy(app.data->parameters()), 0);
+        app.fleetWindow.reset();
+        app.pointer->useEntry(hegemon::PlanetsScreen::kPointerEntry);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The Planets screen could not be read: %s", e.what());
+    }
+}
+
+void closePlanets(App& app) {
+    app.planets.reset();
+    app.planetMessage.reset();
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+}
+
+void showPlanetMessage(App& app, hegemon::MessageBox::Kind kind, const std::string& text) {
+    try {
+        app.planetMessage = std::make_unique<hegemon::MessageBox>(*app.data, kind, text);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The message could not be read: %s", e.what());
+    }
+}
+
+// Sends the ship and says so: "Colony Ship has a course laid for Altair,
+// ETA 3 turns" (HESTRNGS.LBX 317 and 318).
+void sendFromPlanets(App& app, const hegemon::PlanetsScreen::Action& send) {
+    hegemon::Game& game = *app.game;
+    if (send.ship >= game.ships.size()) {
+        return;
+    }
+    hegemon::Ship& ship = game.ships[send.ship];
+    const int star = game.galaxy.planets.at(static_cast<std::size_t>(send.planet)).star;
+    ship.landOn = send.planet;
+    const std::array<std::size_t, 1> ships = {send.ship};
+    hegemon::orderShips(game, app.data->parameters(), ships, star);
+    const hegemon::Star& target = game.galaxy.stars.at(static_cast<std::size_t>(star));
+    const int turns = hegemon::travelTurns(hegemon::shipPlace(game, ship), {target.x, target.y},
+                                           hegemon::shipSpeed(app.data->parameters(), game, ship));
+    app.sentPlanet = send.planet;
+    const auto strings = hegemon::parseStringList(app.data->archive("HESTRNGS.LBX").entry(0));
+    constexpr std::size_t kCourseTurn = 317, kCourseTurns = 318;
+    if (strings.size() > kCourseTurns) {
+        const std::string name = hegemon::productName(
+            *app.data, ship.kind == hegemon::ShipKind::ColonyShip ? hegemon::kColonyShip : hegemon::kOutpostShip);
+        showPlanetMessage(app, hegemon::MessageBox::Kind::Message,
+                          hegemon::formatMessage(strings[turns == 1 ? kCourseTurn : kCourseTurns],
+                                                 {name, target.name, static_cast<long long>(turns)}));
+    }
+    updatePanel(app);
+}
+
+void planetsAction(App& app, const hegemon::PlanetsScreen::Action& action) {
+    using Kind = hegemon::PlanetsScreen::Action::Kind;
+    if (action.kind == Kind::Return) {
+        closePlanets(app);
+    } else if (action.kind == Kind::Send) {
+        if (!action.reroute) {
+            sendFromPlanets(app, action);
+            return;
+        }
+        // The ship already has a planet: the original asks first (HESTRNGS.LBX
+        // 313, "%s has set a course for %s, should I re-route it to %s?").
+        const auto strings = hegemon::parseStringList(app.data->archive("HESTRNGS.LBX").entry(0));
+        constexpr std::size_t kReroute = 313, kPrime = 160;
+        const hegemon::Ship& ship = app.game->ships.at(action.ship);
+        if (strings.size() <= kReroute || ship.landOn < 0) {
+            sendFromPlanets(app, action);
+            return;
+        }
+        const std::string name = hegemon::productName(
+            *app.data, ship.kind == hegemon::ShipKind::ColonyShip ? hegemon::kColonyShip : hegemon::kOutpostShip);
+        app.planetSend = action;
+        showPlanetMessage(app, hegemon::MessageBox::Kind::Question,
+                          hegemon::formatMessage(strings[kReroute],
+                                                 {name, hegemon::planetName(app.game->galaxy, ship.landOn, strings[kPrime]),
+                                                  hegemon::planetName(app.game->galaxy, action.planet, strings[kPrime])}));
+    }
+}
+
+void answerPlanetMessage(App& app, bool yes) {
+    const bool question = app.planetMessage->kind() == hegemon::MessageBox::Kind::Question;
+    app.planetMessage.reset();
+    // Measured: the planet's mark shows once the message is closed.
+    if (app.sentPlanet >= 0) {
+        app.planets->shipSent(app.sentPlanet);
+        app.sentPlanet = -1;
+    }
+    if (question && yes) {
+        sendFromPlanets(app, app.planetSend);
+    }
+}
+
+void stepPlanets(App& app, int dx, int dy) {
+    const auto [x, y] = app.planets->step(app.pointer->x(), app.pointer->y(), dx, dy);
+    app.pointer->move(x, y);
+}
+
+void clickPlanets(App& app) {
+    const int x = app.pointer->x(), y = app.pointer->y();
+    app.planets->press(x, y);
+    planetsAction(app, app.planets->release(x, y));
+}
+
+SDL_AppResult planetsEvent(App& app, SDL_Event* event) {
+    if (app.planetMessage) {
+        using Answer = hegemon::MessageBox::Answer;
+        hegemon::MessageBox& box = *app.planetMessage;
+        switch (event->type) {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            }
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                const Answer a = box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+                if (a != Answer::None) {
+                    answerPlanetMessage(app, a == Answer::Yes);
+                }
+            }
+            break;
+        case SDL_EVENT_KEY_DOWN:
+            if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER || event->key.key == SDLK_Y) {
+                answerPlanetMessage(app, true);
+            } else if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_N) {
+                answerPlanetMessage(app, false);
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+                answerPlanetMessage(app, true);
+            } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+                answerPlanetMessage(app, false);
+            }
+            break;
+        default:
+            break;
+        }
+        return SDL_APP_CONTINUE;
+    }
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            app.planets->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            planetsAction(app, app.planets->release(static_cast<int>(event->button.x),
+                                                    static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        app.planets->scroll(event->wheel.y > 0 ? -1 : 1);
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_ESCAPE:
+            closePlanets(app);
+            break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_SPACE:
+            clickPlanets(app);
+            break;
+        case SDLK_UP:
+        case SDLK_DOWN:
+            stepPlanets(app, 0, event->key.key == SDLK_UP ? -1 : 1);
+            break;
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            stepPlanets(app, event->key.key == SDLK_LEFT ? -1 : 1, 0);
+            break;
+        case SDLK_PAGEUP:
+        case SDLK_PAGEDOWN:
+            app.planets->scroll(event->key.key == SDLK_PAGEUP ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            closePlanets(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            clickPlanets(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            stepPlanets(app, 0, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepPlanets(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? -1 : 1, 0);
+            break;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            app.planets->scroll(event->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
 // The research done screen goes at a click, a key or a gamepad button
 // (assumed).
 SDL_AppResult researchDoneEvent(App& app, SDL_Event* event) {
@@ -2347,6 +2571,9 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (app.colonies) {
         return coloniesEvent(app, event);
     }
+    if (app.planets) {
+        return planetsEvent(app, event);
+    }
     if (app.homeName) {
         auto& box = *app.homeName;
         switch (event->type) {
@@ -2407,6 +2634,15 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
         (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_WEST);
     if (colonies) {
         openColonies(app);
+        return SDL_APP_CONTINUE;
+    }
+    const bool planets =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
+         kPlanetsButton.contains(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) ||
+        (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_P) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_NORTH);
+    if (planets) {
+        openPlanets(app);
         return SDL_APP_CONTINUE;
     }
     const bool turn =
@@ -2751,6 +2987,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             app->colony->draw(app->canvas, app->palette);
             if (app->message) {
                 app->message->draw(app->canvas, app->palette);
+            }
+        } else if (app->planets) {
+            app->planets->draw(app->canvas, app->palette);
+            if (app->planetMessage) {
+                app->planetMessage->draw(app->canvas, app->palette);
             }
         } else if (app->colonies) {
             app->colonies->draw(app->canvas, app->palette);
