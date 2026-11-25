@@ -107,7 +107,7 @@ Rect FleetsScreen::cellRect(std::size_t cell) {
 }
 
 FleetsScreen::FleetsScreen(GameData& data, const Game& game, const TechTree& tree, int player)
-    : data_(&data), game_(&game), player_(player),
+    : data_(&data), game_(&game),
       background_(Image::parse(data.archive(kArchive).entry(kBackgroundEntry))),
       scrollBar_(Image::parse(data.archive(kArchive).entry(kScrollBarEntry))),
       up_(Image::parse(data.archive(kArchive).entry(kUpEntry))),

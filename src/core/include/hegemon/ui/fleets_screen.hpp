@@ -96,7 +96,6 @@ private:
 
     GameData* data_;
     const Game* game_;
-    int player_;
     std::size_t banner_ = 0;
     Palette palette_;
     Image background_, scrollBar_, up_, down_, previous_, next_, all_, relocate_, scrap_, scrapOff_, leadersOff_,
