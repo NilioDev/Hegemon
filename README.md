@@ -60,6 +60,11 @@ gamepad, mouse, keyboard and touch controls.
 > lists the planets of the stars you explored that nobody lives on, with
 > their climate, gravity, minerals and size, sorted and filtered as in the
 > original: a click on one sends your nearest colony or outpost ship there.
+> The FLEETS button shows your fleets one at a time on the Fleet Operations
+> screen, with their ships in a grid, a small map, and for the ship you
+> click its crew, shield, beam attack and defense, weapons and specials (or
+> what a colony ship is for); Support and Combat filter the grid and All
+> lights every ship. Relocate, Scrap and Leaders don't work yet.
 > The GAME
 > button above the galaxy map (or Esc, or the gamepad's Back) opens the
 > game menu: Save Game saves in one of nine slots (click a slot, type a
@@ -133,6 +138,8 @@ what is missing.
 | Use the Colonies screen | Click a name, what it builds, the round button or a sort button | Arrow keys, then Enter; Page Up / Page Down scroll; Esc goes back | D-pad, then A; LB / RB scroll; B goes back |
 | Open the Planets screen | PLANETS under the map | P | Y |
 | Send a colony or outpost ship from the Planets screen | Choose Send Colony Ship or Send Outpost Ship, then click a planet | Arrow keys, then Enter; Esc goes back | D-pad, then A; B goes back |
+| Open the Fleets screen | FLEETS under the map | F | Right stick button |
+| Use the Fleets screen | Click a ship or a button; the arrows beside the bar change the fleet | Arrow keys, then Enter; Tab / Shift+Tab change the fleet; Page Up / Page Down scroll; Esc goes back | D-pad, then A; LB / RB change the fleet; B goes back |
 | Open a fleet's window | Click the fleet | Tab (Shift+Tab goes back) | RB (LB goes back) |
 | Choose which ships of the fleet go | Click their boxes, or All | | |
 | Send the fleet to a star | Click the star | Arrow keys to the star, then Space | D-pad to the star, then A |

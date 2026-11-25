@@ -62,6 +62,8 @@ struct Ship {
     // The planet the Planets screen sent a colony or outpost ship to, -1
     // for none. Hegemon doesn't save it yet.
     int landOn = -1;
+    // Its crew's experience: one more each turn (crew_no_turn_xp).
+    int experience = 0;
 };
 
 struct Player {

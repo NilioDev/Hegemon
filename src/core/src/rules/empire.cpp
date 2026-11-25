@@ -437,6 +437,12 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     // Measured: ships sent off this turn go a turn's way; those built now
     // stay at their colony's star (assumed).
     moveShips(game);
+    // Measured: a ship's crew has 1 EP after the first turn.
+    if (parameters.definition("crew_no_turn_xp") == nullptr || parameters.integer("crew_no_turn_xp") == 0) {
+        for (Ship& s : game.ships) {
+            ++s.experience;
+        }
+    }
     // What is built is made by the people before they grow (assumed), by
     // index: a colony base adds a colony.
     for (std::size_t i = 0, n = game.colonies.size(); i < n; ++i) {

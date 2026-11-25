@@ -20,6 +20,7 @@ class Parameters;
 class Random;
 class TechTree;
 struct Knowledge;
+struct RacePicks;
 
 // Hull sizes, in the order of the settings' hull table.
 enum class Hull : std::uint8_t { Frigate, Destroyer, Cruiser, Battleship, Titan, DoomStar };
@@ -115,6 +116,20 @@ private:
     std::vector<Weapon> weapons_;
     std::vector<int> computerTechs_, driveTechs_, armorTechs_, shieldTechs_;
 };
+
+// The crew levels, the crew_data table's rows: green, regular, veteran,
+// elite and ultra elite.
+inline constexpr int kCrewLevels = 5;
+// The level of a crew with `experience`: the last row whose experience it
+// has (assumed; see docs/rules/fleets-screen.md).
+int crewLevel(const Parameters& parameters, int experience);
+// What the Fleets screen shows for a ship of `design` owned by a race with
+// `picks` and a crew of level `crew`, measured: the beam attack is the
+// computer's bonus and the race's ship attack; the beam defense the race's
+// ship defense and 5 for each point of combat speed. Both add the crew's
+// bonus (assumed).
+int beamAttack(const Parameters& parameters, const RacePicks& picks, const ShipDesign& design, int crew);
+int beamDefense(const Parameters& parameters, const RacePicks& picks, const ShipDesign& design, int crew);
 
 // What the auto-designer makes of a hull with the ai_ship_design table
 // number `table`, its missiles racks of `shots`. Beam groups get their arcs

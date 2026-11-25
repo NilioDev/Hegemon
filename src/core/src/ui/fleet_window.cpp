@@ -41,9 +41,6 @@ const std::vector<ShadowOffset> kOutlineOrder = {{-1, 0}, {1, 1}, {-1, -1}, {0, 
 // from 645: each race's name.
 constexpr std::size_t kFleetTitle = 102, kOrbiting = 103, kEtaTurn = 107, kEtaTurns = 108;
 constexpr std::size_t kRaceNames = 645;
-// SHIPS.LBX: fifty entries for each banner colour, the ships' pictures and
-// last their colours (192 on); the landing ships' pictures.
-constexpr std::size_t kShipsPerBanner = 50, kShipColours = 49;
 constexpr int kColonyShipPicture = 45, kOutpostShipPicture = 46, kTransportPicture = 47;
 
 std::string fill(const std::string& message, const std::string& text) {
@@ -64,7 +61,9 @@ std::string fill(const std::string& message, int n) {
     return s;
 }
 
-int pictureOf(const Game& game, const Ship& ship) {
+} // namespace
+
+int shipPicture(const Game& game, const Ship& ship) {
     const auto& designs = game.players.at(static_cast<std::size_t>(ship.player)).designs;
     switch (ship.kind) {
     case ShipKind::ColonyShip:
@@ -83,8 +82,6 @@ int pictureOf(const Game& game, const Ship& ship) {
     }
     return designs.empty() ? 0 : designs.front().image;
 }
-
-} // namespace
 
 FleetWindow::FleetWindow(GameData& data, const Game& game, const Fleet& fleet, std::size_t banner)
     : top_(Image::parse(data.archive(kArchive).entry(kTopEntry))),
@@ -109,7 +106,7 @@ FleetWindow::FleetWindow(GameData& data, const Game& game, const Fleet& fleet, s
     title_ = fill(strings_[kFleetTitle], races[race]);
     const auto& ships = data.archive("SHIPS.LBX");
     for (const std::size_t i : fleet.ships) {
-        const auto picture = static_cast<std::size_t>(std::clamp(pictureOf(game, game.ships.at(i)), 0,
+        const auto picture = static_cast<std::size_t>(std::clamp(shipPicture(game, game.ships.at(i)), 0,
                                                                  static_cast<int>(kShipColours) - 1));
         pictures_.push_back(Image::parse(ships.entry(std::min<std::size_t>(banner, 7) * kShipsPerBanner + picture)));
     }
