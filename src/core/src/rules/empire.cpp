@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hegemon/rules/empire.hpp"
 
+#include "hegemon/rules/computer_players.hpp"
+
 #include "hegemon/rules/fleet.hpp"
 #include "hegemon/rules/production.hpp"
 
@@ -422,6 +424,8 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     const Economy economy(parameters);
     const bool fixedCost = parameters.integer("fixed_research_cost") != 0;
     const bool keep = parameters.integer("keep_research_on_breakthrough") != 0;
+    // The computer players take their turn first (assumed).
+    orderComputerPlayers(game, parameters, tree, random);
     ++game.stardate;
     // The income and research are those of the turn that ends; the people
     // grow after (assumed).
@@ -437,6 +441,8 @@ void endTurn(Game& game, const Parameters& parameters, const TechTree& tree, Ran
     // Measured: ships sent off this turn go a turn's way; those built now
     // stay at their colony's star (assumed).
     moveShips(game);
+    // Seen: a computer player's colony ship settles in the turn it arrives.
+    landComputerColonyShips(game, parameters);
     // Measured: a ship's crew has 1 EP after the first turn.
     if (parameters.definition("crew_no_turn_xp") == nullptr || parameters.integer("crew_no_turn_xp") == 0) {
         for (Ship& s : game.ships) {
