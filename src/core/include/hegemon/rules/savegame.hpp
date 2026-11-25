@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace hegemon {
 
@@ -35,6 +36,11 @@ inline constexpr std::size_t kSavegameSize = 223120;
 // technologies and the map sizes. Throws FormatError when the file is not
 // a saved game of this version or is damaged.
 SavedGame readSavegame(std::span<const std::uint8_t> bytes, const Parameters& parameters, const TechTree& tree);
+
+// The game in the same layout, under `name` (at most 36 characters).
+// Hegemon writes what it keeps of a game; the rest of the file, such as
+// leaders and diplomacy, stays zero for now.
+std::vector<std::uint8_t> writeSavegame(const Game& game, const std::string& name, const Parameters& parameters);
 
 // Reads only the name and the stardate. Throws FormatError when the file is
 // not a saved game of this version.

@@ -49,7 +49,9 @@ constexpr std::size_t kStarName = 0, kStarNameLength = 15, kStarX = 15, kStarY =
 constexpr std::size_t kPlayerName = 0, kPlayerRace = 36, kPlayerBanner = 37, kPlayerHome = 40, kPlayerMoney = 49,
                       kPlayerFields = 195, kPlayerTechs = 278, kPlayerResearched = 490, kPlayerResearch = 800,
                       kPlayerResearchTech = 801, kPlayerDesigns = 805, kPlayerPicks = 2206;
-constexpr std::uint8_t kKnown = 3;
+constexpr std::size_t kPlayerNameLength = 20, kPlayerRaceName = 20, kPlayerRaceNameLength = 15;
+constexpr std::size_t kPlayerPicksAgain = 2237;
+constexpr std::uint8_t kKnown = 3, kNotKnown = 1;
 
 // A ship: its design, then where it is.
 constexpr std::size_t kDesignSize = 99;
@@ -200,10 +202,12 @@ private:
         const std::size_t stars = g.galaxy.stars.size();
         for (std::size_t i = 0; i < kPlayerSlots; ++i) {
             const std::size_t at = kPlayers + i * kPlayerSize;
-            if (text(span(at + kPlayerName, 20)).empty()) {
+            if (text(span(at + kPlayerName, kPlayerNameLength)).empty()) {
                 break;
             }
             Player pl;
+            pl.ruler = text(span(at + kPlayerName, kPlayerNameLength));
+            pl.raceName = text(span(at + kPlayerRaceName, kPlayerRaceNameLength));
             pl.race = limited<int>(u8(at + kPlayerRace), 12, "race");
             pl.banner = limited<std::size_t>(u8(at + kPlayerBanner), 7, "banner");
             pl.human = i == 0;
@@ -438,10 +442,322 @@ private:
     std::map<std::size_t, std::string> queued_;
 };
 
+// Writes what Hegemon knows of a game in the layout the reader reads;
+// what it doesn't know stays zero.
+class SaveWriter {
+public:
+    SaveWriter(const Game& g, const Parameters& p) : g_(g), p_(p), b_(kSavegameSize, 0) {}
+
+    std::vector<std::uint8_t> write(const std::string& name) {
+        put32(0, kVersion);
+        putText(kName, kNameLength - 1, name);
+        put16(kStardate, g_.stardate);
+        for (const auto& [id, product] : buildingIds()) {
+            buildings_[product] = id;
+        }
+        writeGalaxy();
+        writePlayers();
+        writeShips();
+        writeColonies();
+        return std::move(b_);
+    }
+
+private:
+    void put8(std::size_t at, int v) { b_.at(at) = static_cast<std::uint8_t>(v & 0xff); }
+    void put16(std::size_t at, int v) {
+        put8(at, v);
+        put8(at + 1, v >> 8);
+    }
+    void put32(std::size_t at, std::uint32_t v) {
+        for (std::size_t k = 0; k < 4; ++k) {
+            put8(at + k, static_cast<int>((v >> (8 * k)) & 0xff));
+        }
+    }
+    void putText(std::size_t at, std::size_t room, const std::string& text) {
+        for (std::size_t k = 0; k < text.size() && k < room; ++k) {
+            b_.at(at + k) = static_cast<std::uint8_t>(text[k]);
+        }
+    }
+
+    std::map<int, std::string> buildingIds() const {
+        std::map<int, std::string> ids;
+        const ParameterDefinition* table = p_.definition("building");
+        if (table != nullptr && !table->rowNames.empty()) {
+            for (const std::string& n : table->rowNames[0]) {
+                ids[static_cast<int>(p_.integer("building", {n}, "id"))] = n;
+            }
+        }
+        return ids;
+    }
+
+    void writeGalaxy() {
+        const Galaxy& g = g_.galaxy;
+        put16(kMapWidth, g.width);
+        put16(kMapHeight, g.height);
+        const std::size_t stars = std::min(g.stars.size(), kStarSlots);
+        const std::size_t planets = std::min(g.planets.size(), kPlanetSlots);
+        put16(kStarCount, static_cast<int>(stars));
+        put16(kPlanetCount, static_cast<int>(planets));
+        for (std::size_t i = 0; i < stars; ++i) {
+            const Star& s = g.stars[i];
+            const std::size_t at = kStars + i * kStarSize;
+            putText(at + kStarName, kStarNameLength - 1, s.name);
+            put16(at + kStarX, s.x);
+            put16(at + kStarY, s.y);
+            put8(at + kStarPictureSize, s.size);
+            put8(at + kStarColour, static_cast<int>(s.colour));
+            put8(at + kStarSpecial, static_cast<int>(s.special));
+            put8(at + kStarWormhole, s.wormhole < static_cast<int>(stars) ? s.wormhole : -1);
+            put8(at + kStarInNebula, s.inNebula ? 1 : 0);
+            for (std::size_t o = 0; o < kOrbits; ++o) {
+                const int planet = s.orbits[o];
+                put16(at + kStarOrbits + 2 * o, planet >= 0 && planet < static_cast<int>(planets) ? planet : -1);
+            }
+            int visited = 0;
+            for (std::size_t pl = 0; pl < g_.players.size() && pl < kPlayerSlots; ++pl) {
+                const auto& e = g_.players[pl].explored;
+                // As the original: every player has been to the black holes.
+                if (s.colour == StarColour::BlackHole || (i < e.size() && e[i])) {
+                    visited |= 1 << pl;
+                }
+            }
+            put8(at + kStarVisited, visited);
+        }
+        for (std::size_t i = 0; i < planets; ++i) {
+            const Planet& q = g.planets[i];
+            const std::size_t at = kPlanets + i * kPlanetSize;
+            put16(at, -1); // its colony, if any, comes with the colonies
+            put8(at + kPlanetStar, q.star);
+            put8(at + kPlanetOrbit, q.orbit);
+            put8(at + kPlanetType, static_cast<int>(q.type));
+            put8(at + kPlanetSize_, static_cast<int>(q.size));
+            put8(at + kPlanetGravity, static_cast<int>(q.gravity));
+            put8(at + kPlanetClimate, static_cast<int>(q.climate));
+            put8(at + kPlanetImage, q.image);
+            put8(at + kPlanetMinerals, static_cast<int>(q.minerals));
+            put8(at + kPlanetSpecial, static_cast<int>(q.special));
+        }
+        const std::size_t nebulae = std::min(g.nebulae.size(), kNebulaSlots);
+        put8(kNebulaCount, static_cast<int>(nebulae));
+        for (std::size_t i = 0; i < nebulae; ++i) {
+            const std::size_t at = kNebulae + i * kNebulaSize;
+            put16(at, g.nebulae[i].x);
+            put16(at + 2, g.nebulae[i].y);
+            put8(at + 4, g.nebulae[i].picture);
+        }
+    }
+
+    void writeDesign(std::size_t at, const ShipDesign& d, int type, int player) {
+        putText(at, 15, d.name);
+        put8(at + 16, static_cast<int>(d.hull));
+        put8(at + 17, type);
+        put8(at + 18, d.shield);
+        put8(at + 19, d.drive);
+        put8(at + 21, d.computer);
+        put8(at + 22, d.armor);
+        for (std::size_t k = 0; k < 5; ++k) {
+            put8(at + 23 + k, static_cast<int>((d.specials >> (8 * k)) & 0xff));
+        }
+        for (std::size_t w = 0; w < d.weapons.size() && w < 8; ++w) {
+            const WeaponMount& m = d.weapons[w];
+            const std::size_t mt = at + 28 + 8 * w;
+            put16(mt, m.weapon);
+            put8(mt + 2, m.count);
+            put8(mt + 3, m.count);
+            put8(mt + 4, m.arc);
+            put16(mt + 5, m.mods);
+            put8(mt + 7, m.ammo);
+        }
+        put8(at + 92, d.image);
+        put8(at + 93, player);
+        put16(at + 94, d.cost);
+        put8(at + 96, d.combatSpeed);
+    }
+
+    void writePlayers() {
+        for (std::size_t i = 0; i < g_.players.size() && i < kPlayerSlots; ++i) {
+            const Player& pl = g_.players[i];
+            const std::size_t at = kPlayers + i * kPlayerSize;
+            // A player with no name is no player to the reader.
+            putText(at + kPlayerName, kPlayerNameLength - 1, pl.ruler.empty() ? "Ruler" : pl.ruler);
+            putText(at + kPlayerRaceName, kPlayerRaceNameLength - 1, pl.raceName);
+            put8(at + kPlayerRace, pl.race);
+            put8(at + kPlayerBanner, static_cast<int>(pl.banner));
+            int home = 0;
+            if (i < g_.galaxy.homes.size()) {
+                home = g_.galaxy.homes[i].planet;
+            }
+            put16(at + kPlayerHome, home);
+            put32(at + kPlayerMoney, static_cast<std::uint32_t>(std::max(pl.money, 0)));
+            for (std::size_t f = 0; f < pl.knowledge.fields.size() && kPlayerFields + f < kPlayerTechs; ++f) {
+                put8(at + kPlayerFields + f, pl.knowledge.fields[f] ? kKnown : kNotKnown);
+            }
+            for (std::size_t t = 1; t < pl.knowledge.techs.size() && kPlayerTechs + t < kPlayerResearched; ++t) {
+                put8(at + kPlayerTechs + t, pl.knowledge.techs[t] ? kKnown : 0);
+            }
+            put16(at + kPlayerResearched, pl.researched);
+            put8(at + kPlayerResearch, pl.research);
+            put8(at + kPlayerResearchTech, pl.researchTech);
+            for (std::size_t d = 0; d < pl.designs.size() && d < kDesignSlots; ++d) {
+                writeDesign(at + kPlayerDesigns + d * kDesignSize, pl.designs[d], 0, static_cast<int>(i));
+            }
+            for (std::size_t k = 0; k < RacePicks::Count; ++k) {
+                put8(at + kPlayerPicks + k, pl.picks.values[k]);
+                put8(at + kPlayerPicksAgain + k, pl.picks.values[k]);
+            }
+        }
+    }
+
+    // A ship's record; returns false when the list is full.
+    bool addShip(int player, ShipKind kind, int design, std::uint8_t status, int location, int x, int y,
+                 int speed) {
+        if (ships_ >= kShipSlots) {
+            return false;
+        }
+        const std::size_t at = kShips + ships_ * kShipSize;
+        ++ships_;
+        if (player >= 0 && static_cast<std::size_t>(player) < g_.players.size()) {
+            const auto& designs = g_.players[static_cast<std::size_t>(player)].designs;
+            const int type = kind == ShipKind::ColonyShip    ? kTypeColonyShip
+                             : kind == ShipKind::OutpostShip ? kTypeOutpost
+                             : kind == ShipKind::Transport   ? kTypeTransport
+                                                             : 0;
+            const std::size_t slot = kind == ShipKind::Combat && design > 0 ? static_cast<std::size_t>(design) : 0;
+            ShipDesign d;
+            if (type != 0) {
+                d.name = kind == ShipKind::ColonyShip    ? "Colony Ship"
+                         : kind == ShipKind::OutpostShip ? "Outpost Ship"
+                                                         : "Transport";
+            } else if (slot < designs.size()) {
+                d = designs[slot];
+            }
+            writeDesign(at, d, type, player);
+        }
+        put8(at + kShipPlayer, player);
+        put8(at + kShipStatus, status);
+        put16(at + kShipLocation, location);
+        put16(at + kShipX, x);
+        put16(at + kShipY, y);
+        put8(at + kShipSpeed, speed);
+        return true;
+    }
+
+    void writeShips() {
+        for (const Ship& s : g_.ships) {
+            if (s.star >= 0) {
+                addShip(s.player, s.kind, s.design, kOrbiting, s.star, s.x, s.y, 0);
+            } else if (s.destination >= 0) {
+                addShip(s.player, s.kind, s.design, kTravelling, kTravellingTo + s.destination, s.x, s.y, s.speed);
+            }
+        }
+        for (const Monster& m : g_.galaxy.monsters) {
+            addShip(kFirstMonster + static_cast<int>(m.kind), ShipKind::Combat, -1, kOrbiting, m.star, 0, 0, 0);
+        }
+    }
+
+    // A build list's ship, as a queued ship; its number in the list of ships.
+    std::optional<int> queueShip(int player, const std::string& product) {
+        ShipKind kind = ShipKind::Combat;
+        int design = -1;
+        if (product == kColonyShip) {
+            kind = ShipKind::ColonyShip;
+        } else if (product == kOutpostShip) {
+            kind = ShipKind::OutpostShip;
+        } else if (product == kTransportShip) {
+            kind = ShipKind::Transport;
+        } else if (const auto slot = designSlot(product)) {
+            design = static_cast<int>(*slot);
+            kind = *slot == 0 ? ShipKind::Scout : ShipKind::Combat;
+        } else {
+            return std::nullopt;
+        }
+        const auto number = static_cast<int>(ships_);
+        if (!addShip(player, kind, design, kQueued, 0, 0, 0, 0)) {
+            return std::nullopt;
+        }
+        return number;
+    }
+
+    void writeColonies() {
+        for (std::size_t i = 0; i < kColonySlots; ++i) {
+            put8(kColonies + i * kColonySize + kColonyPlayer, kNoColony);
+        }
+        std::size_t slot = 0;
+        for (const Colony& c : g_.colonies) {
+            if (slot >= kColonySlots || c.planet < 0 || c.planet >= static_cast<int>(std::min(g_.galaxy.planets.size(), kPlanetSlots))) {
+                continue;
+            }
+            const std::size_t at = kColonies + slot * kColonySize;
+            put8(at + kColonyPlayer, c.player);
+            put16(at + kColonyPlanet, c.planet);
+            put16(kPlanets + static_cast<std::size_t>(c.planet) * kPlanetSize, static_cast<int>(slot));
+            const int race = c.player >= 0 && static_cast<std::size_t>(c.player) < g_.players.size()
+                                 ? g_.players[static_cast<std::size_t>(c.player)].race
+                                 : 0;
+            std::size_t people = 0;
+            for (std::size_t job = 0; job < kJobs; ++job) {
+                for (int k = 0; k < c.jobs[job] && people < kColonyPeopleSlots; ++k) {
+                    put32(at + kColonyPerson + 4 * people,
+                          static_cast<std::uint32_t>((race & 0xf) | static_cast<int>(job << 7)));
+                    ++people;
+                }
+            }
+            put8(at + kColonyPeople, static_cast<int>(people));
+            put16(at + kColonyGrowth, c.growth);
+            for (const std::string& b : c.buildings) {
+                const auto id = buildings_.find(b);
+                if (id != buildings_.end() && id->second > 0 &&
+                    kColonyBuildings + static_cast<std::size_t>(id->second) < kColonySize) {
+                    put8(at + kColonyBuildings + static_cast<std::size_t>(id->second), 1);
+                }
+            }
+            std::size_t k = 0;
+            for (const std::string& product : c.buildList) {
+                if (k >= Colony::kBuildListLength) {
+                    break;
+                }
+                int code = 0;
+                if (const auto b = buildings_.find(product); b != buildings_.end()) {
+                    code = b->second;
+                } else if (product == kTradeGoods) {
+                    code = kQueueTradeGoods;
+                } else if (product == kHousing) {
+                    code = kQueueHousing;
+                } else if (product == kSpy) {
+                    code = kQueueSpy;
+                } else if (product == kFreighters) {
+                    code = kQueueFreighters;
+                } else if (const auto ship = queueShip(c.player, product)) {
+                    code = kQueueShip - *ship;
+                } else {
+                    continue;
+                }
+                put16(at + kColonyQueue + 2 * k, code);
+                ++k;
+            }
+            for (; k < Colony::kBuildListLength; ++k) {
+                put16(at + kColonyQueue + 2 * k, kQueueEmpty);
+            }
+            ++slot;
+        }
+        put16(kShipCount, static_cast<int>(ships_));
+    }
+
+    const Game& g_;
+    const Parameters& p_;
+    std::vector<std::uint8_t> b_;
+    std::map<std::string, int> buildings_;
+    std::size_t ships_ = 0;
+};
+
 } // namespace
 
 SavedGame readSavegame(std::span<const std::uint8_t> bytes, const Parameters& parameters, const TechTree& tree) {
     return SaveReader(bytes, parameters, tree).read();
+}
+
+std::vector<std::uint8_t> writeSavegame(const Game& game, const std::string& name, const Parameters& parameters) {
+    return SaveWriter(game, parameters).write(name);
 }
 
 SavegameSummary readSavegameSummary(std::span<const std::uint8_t> bytes) {
