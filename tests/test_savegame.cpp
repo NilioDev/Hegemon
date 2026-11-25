@@ -55,14 +55,14 @@ std::vector<std::uint8_t> saved() {
     put8(b, sal + 22, 4);
     put8(b, sal + 41, 0xff);
     put8(b, sal + 51, 1); // the first player has been there
-    for (int o = 0; o < 5; ++o) {
+    for (std::size_t o = 0; o < 5; ++o) {
         put16(b, sal + 74 + 2 * o, o == 1 ? 0 : 0xffff);
     }
     putText(b, derke, "Derke");
     put16(b, derke + 15, 300);
     put16(b, derke + 17, 50);
     put8(b, derke + 41, 0xff);
-    for (int o = 0; o < 5; ++o) {
+    for (std::size_t o = 0; o < 5; ++o) {
         put16(b, derke + 74 + 2 * o, 0xffff);
     }
     // The planet: a large poor ocean planet in Sal's second orbit.
