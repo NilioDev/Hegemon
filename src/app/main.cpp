@@ -27,6 +27,7 @@
 #include "hegemon/rules/tech.hpp"
 #include "hegemon/ui/build_list.hpp"
 #include "hegemon/ui/colonies_screen.hpp"
+#include "hegemon/ui/fleets_screen.hpp"
 #include "hegemon/ui/planets_screen.hpp"
 #include "hegemon/ui/colony_screen.hpp"
 #include "hegemon/ui/fleet_window.hpp"
@@ -93,6 +94,7 @@ struct App {
     std::unique_ptr<hegemon::ColoniesScreen> colonies;        // the Colonies screen, over the map
     bool buildFromList = false; // the build list was opened from the Colonies screen
     std::unique_ptr<hegemon::PlanetsScreen> planets;          // the Planets screen, over the map
+    std::unique_ptr<hegemon::FleetsScreen> fleets;            // the Fleets screen, over the map
     std::unique_ptr<hegemon::MessageBox> planetMessage;       // what sending a ship says, over it
     hegemon::PlanetsScreen::Action planetSend;                // a ship to send once asked
     int sentPlanet = -1;                                      // its mark shows when the message closes
@@ -421,6 +423,7 @@ void backToMainMenu(App& app) {
     app.buildFromList = false;
     app.planets.reset();
     app.planetMessage.reset();
+    app.fleets.reset();
     app.message.reset();
     app.research.reset();
     app.researchDone.reset();
@@ -2325,6 +2328,124 @@ SDL_AppResult planetsEvent(App& app, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
+// The Fleets screen, opened by the FLEETS button under the map (also F, or
+// the gamepad's right stick).
+constexpr hegemon::Rect kFleetsButton = {162, 436, 76, 38};
+
+void openFleets(App& app) {
+    try {
+        app.fleets = std::make_unique<hegemon::FleetsScreen>(*app.data, *app.game, *app.tree, 0);
+        app.fleetWindow.reset();
+        app.pointer->useEntry(hegemon::FleetsScreen::kPointerEntry);
+    } catch (const std::exception& e) {
+        SDL_Log("The Fleets screen could not be read: %s", e.what());
+    }
+}
+
+void closeFleets(App& app) {
+    app.fleets.reset();
+    app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
+}
+
+void fleetsAction(App& app, hegemon::FleetsScreen::Action action) {
+    if (action == hegemon::FleetsScreen::Action::Return) {
+        closeFleets(app);
+    }
+}
+
+void stepFleets(App& app, int dx, int dy) {
+    const auto [x, y] = app.fleets->step(app.pointer->x(), app.pointer->y(), dx, dy);
+    app.pointer->move(x, y);
+}
+
+void clickFleets(App& app) {
+    const int x = app.pointer->x(), y = app.pointer->y();
+    app.fleets->press(x, y);
+    fleetsAction(app, app.fleets->release(x, y));
+}
+
+void otherFleet(App& app, int step) {
+    hegemon::FleetsScreen& f = *app.fleets;
+    if (!f.fleets().empty()) {
+        const auto n = static_cast<int>(f.fleets().size());
+        f.showFleet(static_cast<std::size_t>((static_cast<int>(f.fleet()) + step + n) % n));
+    }
+}
+
+SDL_AppResult fleetsEvent(App& app, SDL_Event* event) {
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            app.fleets->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            fleetsAction(app, app.fleets->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        app.fleets->scroll(event->wheel.y > 0 ? -1 : 1);
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_ESCAPE:
+            closeFleets(app);
+            break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_SPACE:
+            clickFleets(app);
+            break;
+        case SDLK_UP:
+        case SDLK_DOWN:
+            stepFleets(app, 0, event->key.key == SDLK_UP ? -1 : 1);
+            break;
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            stepFleets(app, event->key.key == SDLK_LEFT ? -1 : 1, 0);
+            break;
+        case SDLK_PAGEUP:
+        case SDLK_PAGEDOWN:
+            app.fleets->scroll(event->key.key == SDLK_PAGEUP ? -1 : 1);
+            break;
+        case SDLK_TAB:
+            otherFleet(app, (event->key.mod & SDL_KMOD_SHIFT) != 0 ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            closeFleets(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            clickFleets(app);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            stepFleets(app, 0, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : 1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            stepFleets(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? -1 : 1, 0);
+            break;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            otherFleet(app, event->gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : 1);
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
 // The research done screen goes at a click, a key or a gamepad button
 // (assumed).
 SDL_AppResult researchDoneEvent(App& app, SDL_Event* event) {
@@ -2574,6 +2695,9 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (app.planets) {
         return planetsEvent(app, event);
     }
+    if (app.fleets) {
+        return fleetsEvent(app, event);
+    }
     if (app.homeName) {
         auto& box = *app.homeName;
         switch (event->type) {
@@ -2643,6 +2767,15 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
         (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_NORTH);
     if (planets) {
         openPlanets(app);
+        return SDL_APP_CONTINUE;
+    }
+    const bool fleetsScreen =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
+         kFleetsButton.contains(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) ||
+        (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_F) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    if (fleetsScreen) {
+        openFleets(app);
         return SDL_APP_CONTINUE;
     }
     const bool turn =
@@ -2988,6 +3121,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             if (app->message) {
                 app->message->draw(app->canvas, app->palette);
             }
+        } else if (app->fleets) {
+            app->fleets->draw(app->canvas, app->palette);
         } else if (app->planets) {
             app->planets->draw(app->canvas, app->palette);
             if (app->planetMessage) {

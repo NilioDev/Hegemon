@@ -2,6 +2,7 @@
 #include "hegemon/rules/ship_design.hpp"
 
 #include "hegemon/config/parameters.hpp"
+#include "hegemon/rules/races.hpp"
 #include "hegemon/rules/random.hpp"
 #include "hegemon/rules/tech.hpp"
 
@@ -543,6 +544,49 @@ std::vector<ShipDesign> startingDesigns(const Parameters& p, const ShipParts& pa
         designs.push_back(std::move(d));
     }
     return designs;
+}
+
+namespace {
+
+int crewBonus(const Parameters& p, int crew, std::string_view column) {
+    const int level = std::clamp(crew, 0, kCrewLevels - 1);
+    return static_cast<int>(p.integer("crew_data", static_cast<std::size_t>(level), columnOf(p, "crew_data", column)));
+}
+
+// A race's ship attack or defense: the race_pick setting of its level.
+int pickBonus(const Parameters& p, const RacePicks& picks, RacePicks::Pick pick) {
+    const int level = picks[pick];
+    if (level < 1 || level > 3) {
+        return 0;
+    }
+    return static_cast<int>(
+        p.integer("race_pick", {}, std::string(pick == RacePicks::Attack ? "attack" : "defense") + std::to_string(level) + "_value"));
+}
+
+} // namespace
+
+int crewLevel(const Parameters& parameters, int experience) {
+    const std::size_t column = columnOf(parameters, "crew_data", "experience");
+    int level = 0;
+    for (int l = 1; l < kCrewLevels; ++l) {
+        if (experience >= parameters.integer("crew_data", static_cast<std::size_t>(l), column)) {
+            level = l;
+        }
+    }
+    return level;
+}
+
+int beamAttack(const Parameters& parameters, const RacePicks& picks, const ShipDesign& design, int crew) {
+    int computer = 0;
+    if (design.computer > 0) {
+        computer = static_cast<int>(parameters.integer("computer", static_cast<std::size_t>(design.computer - 1),
+                                                       columnOf(parameters, "computer", "bonus")));
+    }
+    return computer + pickBonus(parameters, picks, RacePicks::Attack) + crewBonus(parameters, crew, "attack");
+}
+
+int beamDefense(const Parameters& parameters, const RacePicks& picks, const ShipDesign& design, int crew) {
+    return 5 * design.combatSpeed + pickBonus(parameters, picks, RacePicks::Defense) + crewBonus(parameters, crew, "defense");
 }
 
 } // namespace hegemon

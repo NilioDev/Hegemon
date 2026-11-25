@@ -51,12 +51,35 @@ constexpr std::size_t kPlayerName = 0, kPlayerRace = 36, kPlayerBanner = 37, kPl
                       kPlayerResearchTech = 801, kPlayerDesigns = 805, kPlayerPicks = 2206;
 constexpr std::size_t kPlayerNameLength = 20, kPlayerRaceName = 20, kPlayerRaceNameLength = 15;
 constexpr std::size_t kPlayerPicksAgain = 2237;
+// The picks with levels (RacePicks 1 to 9) keep their value in a saved
+// game, as the race_pick settings give it: Ship Defense +50 as 50
+// (measured on the Alkari's game).
+constexpr std::array<std::string_view, 9> kLevelPicks = {"growth",  "farming", "industry", "science", "money",
+                                                         "defense", "attack",  "ground",   "spying"};
+
+int levelPickValue(const Parameters& p, std::size_t pick, int level) {
+    if (pick < RacePicks::Growth || pick > RacePicks::Spying || level < 1 || level > 3) {
+        return 0;
+    }
+    return static_cast<int>(p.integer("race_pick", {}, std::string(kLevelPicks[pick - RacePicks::Growth]) +
+                                                           std::to_string(level) + "_value"));
+}
+
+// The level whose value a saved pick has; 0 for none.
+int levelPickLevel(const Parameters& p, std::size_t pick, int value) {
+    for (int level = 1; level <= 3 && value != 0; ++level) {
+        if (levelPickValue(p, pick, level) == value) {
+            return level;
+        }
+    }
+    return 0;
+}
 constexpr std::uint8_t kKnown = 3, kNotKnown = 1;
 
 // A ship: its design, then where it is.
 constexpr std::size_t kDesignSize = 99;
 constexpr std::size_t kShipPlayer = 99, kShipStatus = 100, kShipLocation = 101, kShipX = 103, kShipY = 105,
-                      kShipSpeed = 108;
+                      kShipSpeed = 108, kShipExperience = 114;
 constexpr std::uint8_t kOrbiting = 0, kTravelling = 1, kQueued = 6;
 constexpr int kTravellingTo = 500;
 constexpr int kFirstMonster = 9, kLastMonster = 14;
@@ -214,7 +237,10 @@ private:
             pl.money = static_cast<int>(std::min<std::uint32_t>(u32(at + kPlayerMoney), 1'000'000'000));
             const auto picks = span(at + kPlayerPicks, RacePicks::Count);
             for (std::size_t k = 0; k < RacePicks::Count; ++k) {
-                pl.picks.values[k] = static_cast<std::int8_t>(picks[k]);
+                const auto v = static_cast<std::int8_t>(picks[k]);
+                pl.picks.values[k] = k >= RacePicks::Growth && k <= RacePicks::Spying
+                                         ? static_cast<std::int8_t>(levelPickLevel(p_, k, v))
+                                         : v;
             }
             pl.knowledge.fields.resize(tree_.fieldCount());
             for (std::size_t f = 0; f < tree_.fieldCount(); ++f) {
@@ -339,6 +365,7 @@ private:
             }
             Ship s;
             s.player = player;
+            s.experience = u16(at + kShipExperience);
             kindOf(g, at, s);
             if (status == kQueued) {
                 queued_[i] = s.kind == ShipKind::ColonyShip    ? std::string(kColonyShip)
@@ -602,15 +629,18 @@ private:
                 writeDesign(at + kPlayerDesigns + d * kDesignSize, pl.designs[d], 0, static_cast<int>(i));
             }
             for (std::size_t k = 0; k < RacePicks::Count; ++k) {
-                put8(at + kPlayerPicks + k, pl.picks.values[k]);
-                put8(at + kPlayerPicksAgain + k, pl.picks.values[k]);
+                const int v = k >= RacePicks::Growth && k <= RacePicks::Spying
+                                  ? levelPickValue(p_, k, pl.picks.values[k])
+                                  : pl.picks.values[k];
+                put8(at + kPlayerPicks + k, v & 0xFF);
+                put8(at + kPlayerPicksAgain + k, v & 0xFF);
             }
         }
     }
 
     // A ship's record; returns false when the list is full.
     bool addShip(int player, ShipKind kind, int design, std::uint8_t status, int location, int x, int y,
-                 int speed) {
+                 int speed, int experience = 0) {
         if (ships_ >= kShipSlots) {
             return false;
         }
@@ -639,15 +669,17 @@ private:
         put16(at + kShipX, x);
         put16(at + kShipY, y);
         put8(at + kShipSpeed, speed);
+        put16(at + kShipExperience, std::clamp(experience, 0, 0xFFFF));
         return true;
     }
 
     void writeShips() {
         for (const Ship& s : g_.ships) {
             if (s.star >= 0) {
-                addShip(s.player, s.kind, s.design, kOrbiting, s.star, s.x, s.y, 0);
+                addShip(s.player, s.kind, s.design, kOrbiting, s.star, s.x, s.y, 0, s.experience);
             } else if (s.destination >= 0) {
-                addShip(s.player, s.kind, s.design, kTravelling, kTravellingTo + s.destination, s.x, s.y, s.speed);
+                addShip(s.player, s.kind, s.design, kTravelling, kTravellingTo + s.destination, s.x, s.y, s.speed,
+                        s.experience);
             }
         }
         for (const Monster& m : g_.galaxy.monsters) {

@@ -22,8 +22,17 @@ namespace hegemon {
 
 class GameData;
 
+// A ship's picture in SHIPS.LBX, counted from its banner colour's first:
+// its design's, the Scout's for a starting scout, 45 to 47 for the colony
+// and outpost ships and the transports.
+int shipPicture(const Game& game, const Ship& ship);
+
 class FleetWindow {
 public:
+    // SHIPS.LBX: fifty entries for each banner colour, the ships' pictures
+    // and last their colours (192 on).
+    static constexpr std::size_t kShipsPerBanner = 50, kShipColours = 49;
+
     enum class Action : std::uint8_t { None, Close, Colonize };
 
     // The fleet's ships, all chosen. Throws FormatError when a file is

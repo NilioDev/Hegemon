@@ -77,7 +77,7 @@ and checks every number it uses against what it may be.
 | 800 | 1 | The field being researched, 0 for none |
 | 801 | 1 | The application chosen in it, by its `tech` id |
 | 805 | 6 × 99 | The designs it builds (see [ship design](../rules/ship-design.md)) |
-| 2206 | 31 | The race's picks, as RACESTUF.LBX keeps them (see [races](races.md)); the same 31 bytes follow again at 2237 |
+| 2206 | 31 | The race's picks, as RACESTUF.LBX keeps them (see [races](races.md)), but the nine with levels as their value in the `race_pick` settings (the Alkari's Ship Defense +50 as 50); the same 31 bytes follow again at 2237 |
 
 The first player is the human. Players 9 to 14 own the monsters: the
 Guardian, the Amoeba, the Crystal, the Dragon, the Eel and the Hydra.
@@ -99,6 +99,7 @@ speed (96). Then:
 | 103, 105 | 2, 2 | x and y on the map |
 | 108 | 1 | Parsecs a turn on its way |
 | 109 | 1 | Turns to go |
+| 114 | 2 | Its crew's experience (an edit to 572 showed "572 EP" on the Fleets screen) |
 | 116 | 2 | Its leader, −1 for none |
 
 A ship that a colony builds is in the list of ships from the moment it is

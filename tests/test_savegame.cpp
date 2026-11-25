@@ -20,6 +20,8 @@ const std::string kList = R"({"patch_version": "test", "parameters": [
   "default": [[506, 400], [759, 600], [1012, 800], [1518, 1200]], "columns": [{"name": "width"}, {"name": "height"}]},
  {"name": "building", "type": "table", "rows": [["capitol", "colony_base", "marine_barracks"]],
   "default": [[8, 0], [11, 0], [24, 0]], "columns": [{"name": "id"}, {"name": "tech_id"}]},
+ {"name": "race_pick", "type": "table", "rows": [], "default": [-20, 25, 50],
+  "columns": [{"name": "defense1_value"}, {"name": "defense2_value"}, {"name": "defense3_value"}]},
 )" + test::techSettings() + "]}";
 
 void put8(std::vector<std::uint8_t>& b, std::size_t at, int v) { b.at(at) = static_cast<std::uint8_t>(v); }
@@ -94,6 +96,7 @@ std::vector<std::uint8_t> saved() {
     put8(b, player + 800, 13);
     put8(b, player + 801, 3);
     put8(b, player + 2206, 2); // dictatorship
+    put8(b, player + 2206 + 6, 50); // Ship Defense +50
     putText(b, player + 805, "Scout");
     putText(b, player + 805 + 99, "Thrush");
     put8(b, player + 805 + 99 + 19, 1);
@@ -162,7 +165,7 @@ HGM_TEST("Saved games: the measured layout of fan patch 1.51") {
     HGM_CHECK(g.players.size() == 1);
     const Player& pl = g.players.at(0);
     HGM_CHECK(pl.human && pl.race == 0 && pl.banner == 3 && pl.money == 63);
-    HGM_CHECK(pl.picks[RacePicks::Government] == 2);
+    HGM_CHECK(pl.picks[RacePicks::Government] == 2 && pl.picks[RacePicks::Defense] == 3);
     HGM_CHECK(pl.knowledge.knowsField(0) && pl.knowledge.knowsField(4) && !pl.knowledge.knowsField(13));
     HGM_CHECK(pl.knowledge.knowsTech(2) && !pl.knowledge.knowsTech(3));
     HGM_CHECK(pl.research == 13 && pl.researchTech == 3 && pl.researched == 25);
@@ -242,7 +245,8 @@ HGM_TEST("Saved games: what Hegemon writes reads back the same") {
     HGM_CHECK(pl.knowledge.knowsField(4) && pl.knowledge.knowsTech(2) && !pl.knowledge.knowsTech(3));
     HGM_CHECK(pl.research == 13 && pl.researchTech == 3 && pl.researched == 25);
     HGM_CHECK(pl.designs.size() == 6 && pl.designs[1].name == "Thrush" && pl.designs[1].weapons.size() == 1);
-    HGM_CHECK(pl.picks[RacePicks::Government] == 2 && pl.explored == a.players[0].explored);
+    HGM_CHECK(pl.picks[RacePicks::Government] == 2 && pl.picks[RacePicks::Defense] == 3);
+    HGM_CHECK(bytes.at(109071 + 2206 + 6) == 50 && pl.explored == a.players[0].explored);
     HGM_CHECK(b.ships.size() == 1 && b.ships[0].destination == 1 && b.ships[0].x == 150 && b.ships[0].speed == 2);
     HGM_CHECK(b.ships[0].kind == ShipKind::Scout);
     HGM_CHECK(b.galaxy.monsters.size() == 1 && b.galaxy.monsters[0].kind == MonsterKind::Guardian);
