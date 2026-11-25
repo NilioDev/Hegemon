@@ -52,9 +52,12 @@ gamepad, mouse, keyboard and touch controls.
 > or Colonize Planet in its fleet's window, asks which planet to settle,
 > shows what the colony would make there, and after Yes lands the ship as
 > in the original: the new colony gets its first person, you may name the
-> star, and the colony screen opens to choose what it builds. Esc on
-> the galaxy map goes back to the main
-> menu. Continue and Load Game are
+> star, and the colony screen opens to choose what it builds. The GAME
+> button above the galaxy map (or Esc, or the gamepad's Back) opens the
+> game menu: Save Game saves in one of nine slots (click a slot, type a
+> name, Enter), Load Game loads another game, New Game and Quit Game ask
+> first, Return closes the menu. Settings and the volume bars don't work
+> yet. Continue and Load Game are
 > only usable when you have savegames, as in the original, and the buttons
 > light up under the mouse or the gamepad. Continue picks up the game the
 > original saved last (`SAVE1.GAM` to `SAVE10.GAM` in your game folder):

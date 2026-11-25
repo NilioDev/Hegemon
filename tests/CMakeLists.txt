@@ -9,7 +9,7 @@ add_executable(hgm_tests
     test_race_select.cpp
     test_ruler_name.cpp
     test_savegame.cpp
-    test_load_game.cpp
+    test_saved_games.cpp
     test_galaxy_map.cpp
     test_banner_select.cpp
     test_parameters.cpp

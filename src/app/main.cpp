@@ -15,8 +15,8 @@
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/ui/banner_select.hpp"
-#include "hegemon/ui/load_game.hpp"
 #include "hegemon/ui/main_menu.hpp"
+#include "hegemon/ui/saved_games.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
 #include "hegemon/rules/empire.hpp"
@@ -64,9 +64,12 @@ struct App {
     std::unique_ptr<hegemon::MainMenu> menu;
     std::unique_ptr<hegemon::Pointer> pointer;
     std::unique_ptr<hegemon::NewGameScreen> newGame; // while it is shown
-    std::unique_ptr<hegemon::LoadGameWindow> loadGame; // over the main menu
-    std::unique_ptr<hegemon::WarningBox> warning;      // over the Load Game window
-    std::optional<std::size_t> lastSlot;               // the saved game loaded last
+    std::unique_ptr<hegemon::SavedGamesWindow> savedGames; // Load or Save Game, over the menu or the map
+    std::unique_ptr<hegemon::WarningBox> warning;          // over the Load Game window
+    std::optional<std::size_t> lastSlot;                   // the saved game loaded or saved last
+    std::unique_ptr<hegemon::GameMenu> gameMenu;           // over the galaxy map
+    std::unique_ptr<hegemon::MessageBox> question;         // Quit Game or New Game asks first
+    bool questionQuits = false;                            // which of the two
     std::unique_ptr<hegemon::Races> races;
     std::unique_ptr<hegemon::RaceSelectScreen> raceSelect; // while it is shown
     std::unique_ptr<hegemon::RulerNames> rulerNames;
@@ -416,8 +419,10 @@ void backToMainMenu(App& app) {
     app.banners.reset();
     app.rulerName.reset();
     app.raceSelect.reset();
-    app.loadGame.reset();
+    app.savedGames.reset();
     app.warning.reset();
+    app.gameMenu.reset();
+    app.question.reset();
     app.pointer->usePicture(hegemon::Pointer::kUsual);
     app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
     app.menu->reopen();
@@ -624,8 +629,9 @@ SDL_Time changedAt(const std::filesystem::path& path) {
 }
 
 // Loads a slot's saved game and shows its galaxy map. Returns false when
-// there is none or it can't be read.
-bool loadSlot(App& app, std::size_t slot) {
+// there is none or it can't be read. Measured: Continue doesn't make it
+// the slot used last, Load Game does.
+bool loadSlot(App& app, std::size_t slot, bool remember) {
     try {
         const auto path = saveFile(app, slot);
         if (!path) {
@@ -633,10 +639,13 @@ bool loadSlot(App& app, std::size_t slot) {
         }
         const hegemon::TechTree tree(app.data->parameters());
         auto saved = hegemon::readSavegame(readSaveFile(*path), app.data->parameters(), tree);
-        app.loadGame.reset();
+        app.savedGames.reset();
         app.warning.reset();
+        app.gameMenu.reset();
         startPlaying(app, std::make_unique<hegemon::Game>(std::move(saved.game)));
-        app.lastSlot = slot;
+        if (remember) {
+            app.lastSlot = slot;
+        }
         return true;
     } catch (const std::exception& e) {
         SDL_Log("The saved game could not be loaded: %s", e.what());
@@ -649,7 +658,7 @@ bool loadSlot(App& app, std::size_t slot) {
 void continueGame(App& app) {
     std::optional<std::size_t> newest;
     SDL_Time newestAt = 0;
-    for (std::size_t slot = 0; slot < hegemon::LoadGameWindow::kSlots; ++slot) {
+    for (std::size_t slot = 0; slot < hegemon::SavedGamesWindow::kSlots; ++slot) {
         if (const auto path = saveFile(app, slot)) {
             const SDL_Time at = changedAt(*path);
             if (!newest || at > newestAt) {
@@ -659,13 +668,13 @@ void continueGame(App& app) {
         }
     }
     if (newest) {
-        loadSlot(app, *newest);
+        loadSlot(app, *newest, false);
     }
 }
 
-// The Load Game window: what each slot holds.
-void openLoadGame(App& app) {
-    hegemon::LoadGameWindow::Slots slots;
+// What each slot holds.
+hegemon::SavedGamesWindow::Slots readSlots(App& app) {
+    hegemon::SavedGamesWindow::Slots slots;
     for (std::size_t slot = 0; slot < slots.size(); ++slot) {
         const auto path = saveFile(app, slot);
         if (!path) {
@@ -686,10 +695,47 @@ void openLoadGame(App& app) {
             SDL_Log("%s is not a saved game: %s", saveFileName(slot).c_str(), e.what());
         }
     }
+    return slots;
+}
+
+// The Load Game or Save Game window, over the main menu or the map.
+void openSavedGames(App& app, hegemon::SavedGamesWindow::Kind kind, hegemon::SavedGamesWindow::Over over) {
     try {
-        app.loadGame = std::make_unique<hegemon::LoadGameWindow>(*app.data, std::move(slots), app.lastSlot);
+        app.savedGames = std::make_unique<hegemon::SavedGamesWindow>(*app.data, kind, over, readSlots(app),
+                                                                     app.lastSlot);
+        if (kind == hegemon::SavedGamesWindow::Kind::Save) {
+            SDL_StartTextInput(app.window);
+        }
     } catch (const hegemon::FormatError& e) {
-        SDL_Log("The Load Game window could not be read: %s", e.what());
+        SDL_Log("The saved games window could not be read: %s", e.what());
+    }
+}
+
+void openLoadGame(App& app) {
+    openSavedGames(app, hegemon::SavedGamesWindow::Kind::Load, hegemon::SavedGamesWindow::Over::MainMenu);
+}
+
+// Writes the game in a slot, through a second file so a failed write keeps
+// the old one.
+bool saveSlot(App& app, std::size_t slot, const std::string& name) {
+    try {
+        const auto bytes = hegemon::writeSavegame(*app.game, name, app.data->parameters());
+        const auto path = saveFile(app, slot).value_or(app.data->folder() / saveFileName(slot));
+        auto part = path;
+        part += ".part";
+        {
+            std::ofstream out(part, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+            if (!out) {
+                throw std::runtime_error("could not write " + part.string());
+            }
+        }
+        std::filesystem::rename(part, path);
+        app.lastSlot = slot;
+        return true;
+    } catch (const std::exception& e) {
+        SDL_Log("The game could not be saved: %s", e.what());
+        return false;
     }
 }
 
@@ -697,7 +743,7 @@ void openLoadGame(App& app) {
 // there is none.
 void chooseSlot(App& app, std::size_t slot) {
     if (saveFile(app, slot)) {
-        loadSlot(app, slot);
+        loadSlot(app, slot, true);
         return;
     }
     try {
@@ -707,30 +753,35 @@ void chooseSlot(App& app, std::size_t slot) {
     }
 }
 
-void closeLoadGame(App& app) {
-    app.loadGame.reset();
+// Cancel: back to the main menu, or (measured) from over the map back to
+// the map itself.
+void closeSavedGames(App& app) {
+    app.savedGames.reset();
     app.warning.reset();
+    SDL_StopTextInput(app.window);
+    if (app.map) {
+        app.gameMenu.reset();
+        return;
+    }
     app.menu->reopen();
     app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
 }
 
-// Hegemon's gamepad in the Load Game window: the pointer jumps from slot to
-// slot.
+// Hegemon's gamepad in the window: the pointer jumps from slot to slot.
 void stepSlot(App& app, int step) {
-    constexpr int n = static_cast<int>(hegemon::LoadGameWindow::kSlots);
+    constexpr int n = static_cast<int>(hegemon::SavedGamesWindow::kSlots);
     int at = step > 0 ? 0 : n - 1;
     for (int s = 0; s < n; ++s) {
-        if (hegemon::LoadGameWindow::slotRect(static_cast<std::size_t>(s)).contains(app.pointer->x(),
-                                                                                    app.pointer->y())) {
+        if (app.savedGames->slotRect(static_cast<std::size_t>(s)).contains(app.pointer->x(), app.pointer->y())) {
             at = (s + step + n) % n;
         }
     }
-    const auto rect = hegemon::LoadGameWindow::slotRect(static_cast<std::size_t>(at));
+    const auto rect = app.savedGames->slotRect(static_cast<std::size_t>(at));
     app.pointer->move(rect.centerX(), rect.centerY());
 }
 
-SDL_AppResult loadGameEvent(App& app, SDL_Event* event) {
-    using Kind = hegemon::LoadGameWindow::Result::Kind;
+SDL_AppResult savedGamesEvent(App& app, SDL_Event* event) {
+    using Kind = hegemon::SavedGamesWindow::Result::Kind;
     if (app.warning) {
         // Measured: a click anywhere closes it.
         const bool close = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_KEY_DOWN ||
@@ -740,42 +791,65 @@ SDL_AppResult loadGameEvent(App& app, SDL_Event* event) {
         }
         return SDL_APP_CONTINUE;
     }
-    auto act = [&](hegemon::LoadGameWindow::Result r) {
+    auto& window = *app.savedGames;
+    auto act = [&](const hegemon::SavedGamesWindow::Result& r) {
         if (r.kind == Kind::Load) {
             chooseSlot(app, r.slot);
+        } else if (r.kind == Kind::Save) {
+            // Measured: saving closes the windows, back to the map.
+            if (saveSlot(app, r.slot, r.name)) {
+                closeSavedGames(app);
+            }
         } else if (r.kind == Kind::Cancel) {
-            closeLoadGame(app);
+            closeSavedGames(app);
         }
     };
+    const bool typing = window.editing().has_value();
     switch (event->type) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
         if (event->button.button == SDL_BUTTON_LEFT) {
-            act(app.loadGame->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+            act(window.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
         }
         break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (event->button.button == SDL_BUTTON_LEFT) {
-            act(app.loadGame->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+            act(window.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_TEXT_INPUT:
+        for (const char* c = event->text.text; *c != '\0'; ++c) {
+            if (static_cast<unsigned char>(*c) < 0x80) { // the font has no others
+                window.type(*c);
+            }
         }
         break;
     case SDL_EVENT_KEY_DOWN:
         if (event->key.key == SDLK_ESCAPE) {
-            closeLoadGame(app);
-        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            // Measured: Esc while typing a name closes the window unsaved.
+            closeSavedGames(app);
+        } else if (typing && event->key.key == SDLK_BACKSPACE) {
+            window.backspace();
+        } else if (typing && (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER)) {
+            act(window.enter());
+        } else if (!typing && (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN)) {
             stepSlot(app, event->key.key == SDLK_UP ? -1 : 1);
-        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
-            act(app.loadGame->press(app.pointer->x(), app.pointer->y()));
+        } else if (!typing && (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER)) {
+            act(window.press(app.pointer->x(), app.pointer->y()));
         }
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
-            closeLoadGame(app);
+            closeSavedGames(app);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
             stepSlot(app, -1);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
             stepSlot(app, 1);
         } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
-            act(app.loadGame->press(app.pointer->x(), app.pointer->y()));
+            // With a gamepad a slot keeps its name: A saves it at once.
+            act(typing ? window.enter() : window.press(app.pointer->x(), app.pointer->y()));
+            if (!typing && app.savedGames && app.savedGames->editing()) {
+                act(app.savedGames->enter());
+            }
         }
         break;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
@@ -786,6 +860,182 @@ SDL_AppResult loadGameEvent(App& app, SDL_Event* event) {
                 stepSlot(app, direction);
             }
             app.stickDirection = direction;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+// The galaxy map's GAME button.
+constexpr hegemon::Rect kGameButton = {250, 2, 60, 18};
+
+void openGameMenu(App& app) {
+    try {
+        app.gameMenu = std::make_unique<hegemon::GameMenu>(*app.data);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The game menu could not be read: %s", e.what());
+    }
+}
+
+void openNewGame(App& app);
+
+// The answer to Quit Game's or New Game's question.
+SDL_AppResult answerQuestion(App& app, bool yes) {
+    app.question.reset();
+    if (!yes) {
+        return SDL_APP_CONTINUE;
+    }
+    if (app.questionQuits) {
+        return SDL_APP_SUCCESS;
+    }
+    // Measured: New Game goes straight to the New Game screen.
+    backToMainMenu(app);
+    openNewGame(app);
+    return SDL_APP_CONTINUE;
+}
+
+void ask(App& app, bool quits) {
+    try {
+        // The original's own title in the question becomes Hegemon's.
+        app.question = std::make_unique<hegemon::MessageBox>(
+            *app.data, hegemon::MessageBox::Kind::Question,
+            quits ? "Do you wish to leave Hegemon?" : "Do you wish to abandon this game and start a new one?");
+        app.questionQuits = quits;
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The question could not be read: %s", e.what());
+    }
+}
+
+SDL_AppResult questionEvent(App& app, SDL_Event* event) {
+    hegemon::MessageBox& box = *app.question;
+    using Answer = hegemon::MessageBox::Answer;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            box.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            const Answer a = box.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+            if (a != Answer::None) {
+                return answerQuestion(app, a == Answer::Yes);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER || event->key.key == SDLK_Y) {
+            return answerQuestion(app, true);
+        }
+        if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_N) {
+            return answerQuestion(app, false);
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            return answerQuestion(app, true);
+        }
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            return answerQuestion(app, false);
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+// Hegemon's gamepad in the game menu: the pointer jumps from button to
+// button.
+void stepGameMenu(App& app, int step) {
+    constexpr int n = static_cast<int>(hegemon::GameMenu::kButtons);
+    int at = step > 0 ? 0 : n - 1;
+    for (int b = 0; b < n; ++b) {
+        if (hegemon::GameMenu::buttonRect(static_cast<hegemon::GameMenu::Button>(b))
+                .contains(app.pointer->x(), app.pointer->y())) {
+            at = (b + step + n) % n;
+        }
+    }
+    const auto rect = hegemon::GameMenu::buttonRect(static_cast<hegemon::GameMenu::Button>(at));
+    app.pointer->move(rect.centerX(), rect.centerY());
+}
+
+SDL_AppResult chooseInGameMenu(App& app, hegemon::GameMenu::Button b) {
+    using Button = hegemon::GameMenu::Button;
+    using W = hegemon::SavedGamesWindow;
+    switch (b) {
+    case Button::Save:
+        openSavedGames(app, W::Kind::Save, W::Over::Game);
+        break;
+    case Button::Load:
+        openSavedGames(app, W::Kind::Load, W::Over::Game);
+        break;
+    case Button::NewGame:
+        ask(app, false);
+        break;
+    case Button::Quit:
+        ask(app, true);
+        break;
+    case Button::Settings:
+        SDL_Log("The settings are not there yet.");
+        break;
+    case Button::Return:
+        app.gameMenu.reset();
+        break;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult gameMenuEvent(App& app, SDL_Event* event) {
+    if (app.question) {
+        return questionEvent(app, event);
+    }
+    if (app.savedGames) {
+        return savedGamesEvent(app, event);
+    }
+    auto& menu = *app.gameMenu;
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            menu.press(static_cast<int>(event->button.x), static_cast<int>(event->button.y));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (const auto b = menu.release(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) {
+                return chooseInGameMenu(app, *b);
+            }
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        // Measured: Esc closes the menu.
+        if (event->key.key == SDLK_ESCAPE) {
+            app.gameMenu.reset();
+        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN || event->key.key == SDLK_TAB) {
+            stepGameMenu(app, event->key.key == SDLK_UP ? -1 : 1);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            menu.press(app.pointer->x(), app.pointer->y());
+            if (const auto b = menu.release(app.pointer->x(), app.pointer->y())) {
+                return chooseInGameMenu(app, *b);
+            }
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST || event->gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {
+            app.gameMenu.reset();
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP ||
+                   event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) {
+            stepGameMenu(app, -1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN ||
+                   event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) {
+            stepGameMenu(app, 1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            menu.press(app.pointer->x(), app.pointer->y());
+            if (const auto b = menu.release(app.pointer->x(), app.pointer->y())) {
+                return chooseInGameMenu(app, *b);
+            }
         }
         break;
     default:
@@ -832,9 +1082,22 @@ void makeGalaxy(App& app) {
         for (const auto& p : settings.players) {
             picks.push_back(p.picks);
         }
+        const std::string ruler = app.rulerName ? app.rulerName->name() : std::string();
         startPlaying(app, std::make_unique<hegemon::Game>(hegemon::startGame(
                               app.data->parameters(), generator.generate(settings, random), picks, banners,
                               random.next())));
+        // For the saved game: the rulers' and races' names.
+        for (std::size_t k = 0; k < app.game->players.size(); ++k) {
+            hegemon::Player& pl = app.game->players[k];
+            const auto race = static_cast<std::size_t>(pl.race);
+            if (race < hegemon::Races::kStockRaces) {
+                pl.raceName = std::string(hegemon::Races::kNames[race]);
+                if (k > 0 && app.rulerNames) {
+                    pl.ruler = app.rulerNames->name(race, app.random() % hegemon::RulerNames::kPerRace);
+                }
+            }
+        }
+        app.game->players.at(0).ruler = ruler;
         const hegemon::Galaxy& galaxy = app.game->galaxy;
         const auto& home = galaxy.stars.at(static_cast<std::size_t>(galaxy.homes.at(0).star));
         app.homeName = std::make_unique<hegemon::NameBox>(hegemon::homeStarNameBox(*app.data, home.name));
@@ -1910,7 +2173,20 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
             return SDL_APP_CONTINUE;
         }
     }
+    if (app.gameMenu) {
+        return gameMenuEvent(app, event);
+    }
     if (systemEvent(app, event) || fleetEvent(app, event)) {
+        return SDL_APP_CONTINUE;
+    }
+    const bool game =
+        (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT &&
+         kGameButton.contains(static_cast<int>(event->button.x), static_cast<int>(event->button.y))) ||
+        (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
+        (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_BACK);
+    if (game) {
+        // The original's Esc does nothing here; Hegemon's opens the menu.
+        openGameMenu(app);
         return SDL_APP_CONTINUE;
     }
     const bool turn =
@@ -1921,11 +2197,6 @@ SDL_AppResult mapEvent(App& app, SDL_Event* event) {
     if (turn) {
         endTurn(app);
         return SDL_APP_CONTINUE;
-    }
-    const bool back = (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) ||
-                      (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST);
-    if (back) {
-        backToMainMenu(app);
     }
     return SDL_APP_CONTINUE;
 }
@@ -2232,8 +2503,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     if (app->raceSelect) {
         return raceSelectEvent(*app, event);
     }
-    if (app->loadGame) {
-        return loadGameEvent(*app, event);
+    if (app->savedGames) {
+        return savedGamesEvent(*app, event);
     }
     return app->newGame ? newGameEvent(*app, event) : menuEvent(*app, event);
 }
@@ -2286,6 +2557,20 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
                 app->homeName->tick(elapsed);
                 app->homeName->draw(app->canvas);
             }
+            if (app->gameMenu) {
+                app->gameMenu->draw(app->canvas);
+                if (app->savedGames) {
+                    app->savedGames->tick(elapsed);
+                    app->savedGames->draw(app->canvas, app->palette);
+                }
+                if (app->warning) {
+                    app->warning->advance(elapsed);
+                    app->warning->draw(app->canvas, app->palette);
+                }
+                if (app->question) {
+                    app->question->draw(app->canvas, app->palette);
+                }
+            }
         } else if (app->generating) {
             if (app->shownGenerating) {
                 makeGalaxy(*app);
@@ -2303,12 +2588,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         } else if (app->newGame) {
             app->newGame->draw(app->canvas, app->palette);
         } else {
-            if (!app->loadGame) {
+            if (!app->savedGames) {
                 app->menu->tick(elapsed);
             }
-            app->menu->draw(app->canvas, app->palette, app->loadGame != nullptr);
-            if (app->loadGame) {
-                app->loadGame->draw(app->canvas, app->palette);
+            app->menu->draw(app->canvas, app->palette, app->savedGames != nullptr);
+            if (app->savedGames) {
+                app->savedGames->draw(app->canvas, app->palette);
             }
             if (app->warning) {
                 app->warning->advance(elapsed);

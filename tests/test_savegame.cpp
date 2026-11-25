@@ -220,3 +220,36 @@ HGM_TEST("Saved games: damaged ones are refused") {
     put8(b, 90857 + 8, 12); // no such climate
     HGM_CHECK(refused(b, p, tree));
 }
+
+HGM_TEST("Saved games: what Hegemon writes reads back the same") {
+    const Parameters p = Parameters::defaults(kList);
+    const TechTree tree(p);
+    const SavedGame first = readSavegame(saved(), p, tree);
+    const auto bytes = writeSavegame(first.game, "Written", p);
+    HGM_CHECK(bytes.size() == kSavegameSize);
+    const SavedGame again = readSavegame(bytes, p, tree);
+    HGM_CHECK(again.name == "Written" && readSavegameSummary(bytes).stardate == 35012);
+    const Game& a = first.game;
+    const Game& b = again.game;
+    HGM_CHECK(b.galaxy.width == a.galaxy.width && b.galaxy.mapSize == a.galaxy.mapSize);
+    HGM_CHECK(b.galaxy.stars.size() == 2 && b.galaxy.stars[1].name == "Derke" && b.galaxy.stars[0].orbits[1] == 0);
+    HGM_CHECK(b.galaxy.stars[0].colour == a.galaxy.stars[0].colour && b.galaxy.stars[0].wormhole == -1);
+    HGM_CHECK(b.galaxy.nebulae.size() == 1 && b.galaxy.nebulae[0].x == 324 && b.galaxy.nebulae[0].picture == 7);
+    const Planet& q = b.galaxy.planets.at(0);
+    HGM_CHECK(q.size == PlanetSize::Large && q.climate == Climate::Ocean && q.image == 2);
+    const Player& pl = b.players.at(0);
+    HGM_CHECK(pl.ruler == "Heggira" && pl.raceName == "Alkari" && pl.banner == 3 && pl.money == 63);
+    HGM_CHECK(pl.knowledge.knowsField(4) && pl.knowledge.knowsTech(2) && !pl.knowledge.knowsTech(3));
+    HGM_CHECK(pl.research == 13 && pl.researchTech == 3 && pl.researched == 25);
+    HGM_CHECK(pl.designs.size() == 6 && pl.designs[1].name == "Thrush" && pl.designs[1].weapons.size() == 1);
+    HGM_CHECK(pl.picks[RacePicks::Government] == 2 && pl.explored == a.players[0].explored);
+    HGM_CHECK(b.ships.size() == 1 && b.ships[0].destination == 1 && b.ships[0].x == 150 && b.ships[0].speed == 2);
+    HGM_CHECK(b.ships[0].kind == ShipKind::Scout);
+    HGM_CHECK(b.galaxy.monsters.size() == 1 && b.galaxy.monsters[0].kind == MonsterKind::Guardian);
+    const Colony& c = b.colonies.at(0);
+    HGM_CHECK(c.jobs == a.colonies[0].jobs && c.growth == 73 && c.buildings == a.colonies[0].buildings);
+    HGM_CHECK(c.buildList == a.colonies[0].buildList);
+    // Too long a name is cut to the 36 characters there is room for.
+    const auto longer = writeSavegame(a, std::string(50, 'x'), p);
+    HGM_CHECK(readSavegameSummary(longer).name == std::string(36, 'x'));
+}

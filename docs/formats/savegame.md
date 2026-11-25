@@ -118,6 +118,15 @@ A slot whose owner is 0xFF holds no colony.
 | 279 | 7 × 2 | The build list, first at the front: a building by its `building` id (the colony base is building 11), −1 nothing, −2 trade goods, −3 housing, −7 a spy, −15 freighters, −(100 + *n*) the ship number *n* |
 | 312 + id | 1 a building | Has the building of `building` id *id* |
 
+## Writing
+
+Hegemon writes its games in this layout too (see [saved
+games](../rules/saved-games.md)). It writes everything above and leaves
+the rest zero. A ship in a build list becomes a ship with status 6 at the
+end of the list of ships. A person's loyalty bits stay 0, and a field not
+known is written as 1. A player without a ruler's name gets "Ruler",
+because the reader counts a player by that name.
+
 ## Not read yet
 
 How far the first of a build list is, spies, freighters, leaders,

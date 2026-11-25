@@ -62,6 +62,8 @@ struct Ship {
 };
 
 struct Player {
+    std::string ruler;    // the ruler's name
+    std::string raceName; // as the race selection names it
     int race = 0; // one of the stock races
     RacePicks picks;
     std::size_t banner = 0;
