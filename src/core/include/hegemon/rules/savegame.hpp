@@ -22,6 +22,12 @@ struct SavedGame {
     Game game;
 };
 
+// What the Load Game and Save Game windows show of a saved game.
+struct SavegameSummary {
+    std::string name;
+    int stardate = 0; // in tenths of a year
+};
+
 // The size of every saved game of fan patch 1.51.
 inline constexpr std::size_t kSavegameSize = 223120;
 
@@ -29,5 +35,9 @@ inline constexpr std::size_t kSavegameSize = 223120;
 // technologies and the map sizes. Throws FormatError when the file is not
 // a saved game of this version or is damaged.
 SavedGame readSavegame(std::span<const std::uint8_t> bytes, const Parameters& parameters, const TechTree& tree);
+
+// Reads only the name and the stardate. Throws FormatError when the file is
+// not a saved game of this version.
+SavegameSummary readSavegameSummary(std::span<const std::uint8_t> bytes);
 
 } // namespace hegemon

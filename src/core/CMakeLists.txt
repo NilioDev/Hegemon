@@ -15,6 +15,7 @@ add_library(hgm_core STATIC
     src/ui/colony_screen.cpp
     src/ui/build_list.cpp
     src/ui/message_box.cpp
+    src/ui/load_game.cpp
     src/ui/product_picture.cpp
     src/ui/banner_select.cpp
     src/ui/fleet_window.cpp

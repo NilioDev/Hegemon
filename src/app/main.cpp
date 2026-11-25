@@ -15,6 +15,7 @@
 #include "hegemon/game_data.hpp"
 #include "hegemon/game_files.hpp"
 #include "hegemon/ui/banner_select.hpp"
+#include "hegemon/ui/load_game.hpp"
 #include "hegemon/ui/main_menu.hpp"
 #include "hegemon/ui/new_game.hpp"
 #include "hegemon/ui/pointer.hpp"
@@ -63,6 +64,9 @@ struct App {
     std::unique_ptr<hegemon::MainMenu> menu;
     std::unique_ptr<hegemon::Pointer> pointer;
     std::unique_ptr<hegemon::NewGameScreen> newGame; // while it is shown
+    std::unique_ptr<hegemon::LoadGameWindow> loadGame; // over the main menu
+    std::unique_ptr<hegemon::WarningBox> warning;      // over the Load Game window
+    std::optional<std::size_t> lastSlot;               // the saved game loaded last
     std::unique_ptr<hegemon::Races> races;
     std::unique_ptr<hegemon::RaceSelectScreen> raceSelect; // while it is shown
     std::unique_ptr<hegemon::RulerNames> rulerNames;
@@ -140,6 +144,7 @@ void openNewGame(App& app) {
 
 // What a choice in the main menu does.
 void continueGame(App& app);
+void openLoadGame(App& app);
 
 SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
     using Choice = hegemon::MainMenu::Choice;
@@ -152,6 +157,10 @@ SDL_AppResult choose(App& app, hegemon::MainMenu::Choice choice) {
     }
     if (choice == Choice::Continue) {
         continueGame(app);
+        return SDL_APP_CONTINUE;
+    }
+    if (choice == Choice::Load) {
+        openLoadGame(app);
         return SDL_APP_CONTINUE;
     }
     SDL_Log("This part of the game is not there yet.");
@@ -407,6 +416,8 @@ void backToMainMenu(App& app) {
     app.banners.reset();
     app.rulerName.reset();
     app.raceSelect.reset();
+    app.loadGame.reset();
+    app.warning.reset();
     app.pointer->usePicture(hegemon::Pointer::kUsual);
     app.pointer->useEntry(hegemon::Pointer::kMainMenuEntry);
     app.menu->reopen();
@@ -586,25 +597,201 @@ void startPlaying(App& app, std::unique_ptr<hegemon::Game> game) {
     app.pointer->useEntry(hegemon::GalaxyMap::kPointerEntry);
 }
 
-// Continue: the game the original saved at the start of the last turn.
-void continueGame(App& app) {
+// SAVE1.GAM to SAVE10.GAM, the last the autosave.
+std::string saveFileName(std::size_t slot) {
+    return "SAVE" + std::to_string(slot + 1) + ".GAM";
+}
+
+std::optional<std::filesystem::path> saveFile(App& app, std::size_t slot) {
+    return hegemon::findFileNoCase(app.data->folder(), saveFileName(slot));
+}
+
+std::vector<std::uint8_t> readSaveFile(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(hegemon::kSavegameSize);
+    char c = 0;
+    while (bytes.size() <= hegemon::kSavegameSize && in.get(c)) {
+        bytes.push_back(static_cast<std::uint8_t>(c));
+    }
+    return bytes; // one byte too many when the file is too big: refused then
+}
+
+// When a file was last changed, in SDL's time; 0 when not known.
+SDL_Time changedAt(const std::filesystem::path& path) {
+    SDL_PathInfo info{};
+    return SDL_GetPathInfo(path.string().c_str(), &info) ? info.modify_time : 0;
+}
+
+// Loads a slot's saved game and shows its galaxy map. Returns false when
+// there is none or it can't be read.
+bool loadSlot(App& app, std::size_t slot) {
     try {
-        const auto path = hegemon::findFileNoCase(app.data->folder(), "SAVE10.GAM");
+        const auto path = saveFile(app, slot);
         if (!path) {
-            return;
-        }
-        std::ifstream in(*path, std::ios::binary);
-        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        if (bytes.size() > hegemon::kSavegameSize) {
-            throw hegemon::FormatError("SAVE10.GAM is too big");
+            return false;
         }
         const hegemon::TechTree tree(app.data->parameters());
-        auto saved = hegemon::readSavegame(bytes, app.data->parameters(), tree);
+        auto saved = hegemon::readSavegame(readSaveFile(*path), app.data->parameters(), tree);
+        app.loadGame.reset();
+        app.warning.reset();
         startPlaying(app, std::make_unique<hegemon::Game>(std::move(saved.game)));
+        app.lastSlot = slot;
+        return true;
     } catch (const std::exception& e) {
         SDL_Log("The saved game could not be loaded: %s", e.what());
         backToMainMenu(app);
+        return false;
     }
+}
+
+// Continue: measured, the saved game changed last, the autosave or not.
+void continueGame(App& app) {
+    std::optional<std::size_t> newest;
+    SDL_Time newestAt = 0;
+    for (std::size_t slot = 0; slot < hegemon::LoadGameWindow::kSlots; ++slot) {
+        if (const auto path = saveFile(app, slot)) {
+            const SDL_Time at = changedAt(*path);
+            if (!newest || at > newestAt) {
+                newest = slot;
+                newestAt = at;
+            }
+        }
+    }
+    if (newest) {
+        loadSlot(app, *newest);
+    }
+}
+
+// The Load Game window: what each slot holds.
+void openLoadGame(App& app) {
+    hegemon::LoadGameWindow::Slots slots;
+    for (std::size_t slot = 0; slot < slots.size(); ++slot) {
+        const auto path = saveFile(app, slot);
+        if (!path) {
+            continue;
+        }
+        try {
+            const auto summary = hegemon::readSavegameSummary(readSaveFile(*path));
+            hegemon::SaveSlot s;
+            s.name = summary.name;
+            s.stardate = summary.stardate;
+            SDL_DateTime when{};
+            if (SDL_TimeToDateTime(changedAt(*path), &when, true)) {
+                s.date = hegemon::savedDate(when.year, when.month, when.day);
+                s.time = hegemon::savedTime(when.hour, when.minute);
+            }
+            slots[slot] = std::move(s);
+        } catch (const std::exception& e) {
+            SDL_Log("%s is not a saved game: %s", saveFileName(slot).c_str(), e.what());
+        }
+    }
+    try {
+        app.loadGame = std::make_unique<hegemon::LoadGameWindow>(*app.data, std::move(slots), app.lastSlot);
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The Load Game window could not be read: %s", e.what());
+    }
+}
+
+// A slot clicked in the Load Game window: its game, or the warning that
+// there is none.
+void chooseSlot(App& app, std::size_t slot) {
+    if (saveFile(app, slot)) {
+        loadSlot(app, slot);
+        return;
+    }
+    try {
+        app.warning = std::make_unique<hegemon::WarningBox>(*app.data, saveFileName(slot) + " does not exist");
+    } catch (const hegemon::FormatError& e) {
+        SDL_Log("The warning box could not be read: %s", e.what());
+    }
+}
+
+void closeLoadGame(App& app) {
+    app.loadGame.reset();
+    app.warning.reset();
+    app.menu->reopen();
+    app.menu->pointerMoved(app.pointer->x(), app.pointer->y());
+}
+
+// Hegemon's gamepad in the Load Game window: the pointer jumps from slot to
+// slot.
+void stepSlot(App& app, int step) {
+    constexpr int n = static_cast<int>(hegemon::LoadGameWindow::kSlots);
+    int at = step > 0 ? 0 : n - 1;
+    for (int s = 0; s < n; ++s) {
+        if (hegemon::LoadGameWindow::slotRect(static_cast<std::size_t>(s)).contains(app.pointer->x(),
+                                                                                    app.pointer->y())) {
+            at = (s + step + n) % n;
+        }
+    }
+    const auto rect = hegemon::LoadGameWindow::slotRect(static_cast<std::size_t>(at));
+    app.pointer->move(rect.centerX(), rect.centerY());
+}
+
+SDL_AppResult loadGameEvent(App& app, SDL_Event* event) {
+    using Kind = hegemon::LoadGameWindow::Result::Kind;
+    if (app.warning) {
+        // Measured: a click anywhere closes it.
+        const bool close = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_KEY_DOWN ||
+                           event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        if (close) {
+            app.warning.reset();
+        }
+        return SDL_APP_CONTINUE;
+    }
+    auto act = [&](hegemon::LoadGameWindow::Result r) {
+        if (r.kind == Kind::Load) {
+            chooseSlot(app, r.slot);
+        } else if (r.kind == Kind::Cancel) {
+            closeLoadGame(app);
+        }
+    };
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            act(app.loadGame->press(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            act(app.loadGame->release(static_cast<int>(event->button.x), static_cast<int>(event->button.y)));
+        }
+        break;
+    case SDL_EVENT_KEY_DOWN:
+        if (event->key.key == SDLK_ESCAPE) {
+            closeLoadGame(app);
+        } else if (event->key.key == SDLK_UP || event->key.key == SDLK_DOWN) {
+            stepSlot(app, event->key.key == SDLK_UP ? -1 : 1);
+        } else if (event->key.key == SDLK_RETURN || event->key.key == SDLK_KP_ENTER) {
+            act(app.loadGame->press(app.pointer->x(), app.pointer->y()));
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (event->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
+            closeLoadGame(app);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) {
+            stepSlot(app, -1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            stepSlot(app, 1);
+        } else if (event->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
+            act(app.loadGame->press(app.pointer->x(), app.pointer->y()));
+        }
+        break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        if (event->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            const float v = static_cast<float>(event->gaxis.value) / 32767.0f;
+            const int direction = v > kStickThreshold ? 1 : v < -kStickThreshold ? -1 : 0;
+            if (direction != 0 && direction != app.stickDirection) {
+                stepSlot(app, direction);
+            }
+            app.stickDirection = direction;
+        }
+        break;
+    default:
+        break;
+    }
+    return SDL_APP_CONTINUE;
 }
 
 void makeGalaxy(App& app) {
@@ -2045,6 +2232,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
     if (app->raceSelect) {
         return raceSelectEvent(*app, event);
     }
+    if (app->loadGame) {
+        return loadGameEvent(*app, event);
+    }
     return app->newGame ? newGameEvent(*app, event) : menuEvent(*app, event);
 }
 
@@ -2113,8 +2303,17 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         } else if (app->newGame) {
             app->newGame->draw(app->canvas, app->palette);
         } else {
-            app->menu->tick(elapsed);
-            app->menu->draw(app->canvas, app->palette);
+            if (!app->loadGame) {
+                app->menu->tick(elapsed);
+            }
+            app->menu->draw(app->canvas, app->palette, app->loadGame != nullptr);
+            if (app->loadGame) {
+                app->loadGame->draw(app->canvas, app->palette);
+            }
+            if (app->warning) {
+                app->warning->advance(elapsed);
+                app->warning->draw(app->canvas, app->palette);
+            }
         }
         app->pointer->draw(app->canvas);
         hegemon::toRgba(app->canvas, app->palette, app->rgba);

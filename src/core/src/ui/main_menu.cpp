@@ -241,7 +241,7 @@ std::optional<MainMenu::Choice> MainMenu::activate() {
     return highlighted_;
 }
 
-void MainMenu::draw(Canvas& canvas, Palette& palette) const {
+void MainMenu::draw(Canvas& canvas, Palette& palette, bool covered) const {
     // The last frame of the opening is the screen behind the buttons. It is
     // the picture of entries 1 and 2, but for 22 pixels.
     background_.applyPalette(palette);
@@ -251,17 +251,21 @@ void MainMenu::draw(Canvas& canvas, Palette& palette) const {
             canvas.set(x, y, opened_.at(x, y));
         }
     }
-    credits_.draw(canvas);
+    if (!covered) {
+        credits_.draw(canvas);
+    }
     if (opening()) {
         return;
     }
-    drawLabel(canvas, modName_);
-    drawLabel(canvas, version_);
+    if (!covered) {
+        drawLabel(canvas, modName_);
+        drawLabel(canvas, version_);
+    }
     for (std::size_t b = 0; b < kButtons; ++b) {
         int state = kNormal;
         if (!enabled_[b]) {
             state = kGreyedOut;
-        } else if (highlighted_ && index(*highlighted_) == b) {
+        } else if (!covered && highlighted_ && index(*highlighted_) == b) {
             state = kHighlighted;
         }
         buttons_[b][static_cast<std::size_t>(state)].draw(0, canvas, kButtonX, kButtonY[b]);

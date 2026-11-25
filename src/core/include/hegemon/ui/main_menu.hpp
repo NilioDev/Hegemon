@@ -66,7 +66,9 @@ public:
     Credits& credits() { return credits_; }
 
     // Draws the whole screen and sets the colours it is drawn with.
-    void draw(Canvas& canvas, Palette& palette) const;
+    // Under a window (`covered`), measured: the buttons only, none lit, and
+    // no credits or version.
+    void draw(Canvas& canvas, Palette& palette, bool covered = false) const;
 
     // Where button `i` sits on the screen, from the top.
     using Rect = hegemon::Rect;
