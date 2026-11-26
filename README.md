@@ -62,7 +62,10 @@ gamepad, mouse, keyboard and touch controls.
 > original: a click on one sends your nearest colony or outpost ship there.
 > The computer players research, put their people to work, build, send out
 > their scouts and settle new planets with their colony ships, as seen in
-> the original; their warships, diplomacy and combat are still to come.
+> the original; their warships and diplomacy are still to come.
+> Space monsters fight the ships that fly into their systems: the map tells
+> you "A Space Hydra attacks ..." and the battle is fought out at once, as
+> on the combat screen's AUTO (the combat screen itself is still to come).
 > The FLEETS button shows your fleets one at a time on the Fleet Operations
 > screen, with their ships in a grid, a small map, and for the ship you
 > click its crew, shield, beam attack and defense, weapons and specials (or

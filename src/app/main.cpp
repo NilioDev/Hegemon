@@ -106,6 +106,8 @@ struct App {
     std::unique_ptr<hegemon::FleetWindow> fleetWindow;        // over the map
     std::unique_ptr<hegemon::SystemWindow> systemWindow;      // a star system, over the map
     std::vector<int> arrivals; // stars the human's ships first reached this turn, still to be shown
+    std::vector<hegemon::BattleReport> battles; // the human's battles of the turn, still to be told
+    std::unique_ptr<hegemon::WarningBox> attack; // "A Space Hydra attacks ...", over the map
     bool inTurn = false;       // showing what the turn brought: the rest follows
     bool selecting = false;    // the star system window asks where a colony ship lands
     std::unique_ptr<hegemon::ColonizeBox> colonizeBox;   // over the star system window
@@ -412,6 +414,8 @@ void backToMainMenu(App& app) {
     app.fleetWindow.reset();
     app.systemWindow.reset();
     app.arrivals.clear();
+    app.battles.clear();
+    app.attack.reset();
     app.inTurn = false;
     app.selecting = false;
     app.colonizeBox.reset();
@@ -1156,7 +1160,55 @@ void leaveColony(App& app);
 
 // What the turn brought, one after another: the stars reached, then the
 // rest.
+void continueTurn(App& app);
+
+// The next of the turn's attacks on the human: the message the original
+// shows on the galaxy map before the battle. Returns whether one opened.
+bool showBattle(App& app) {
+    while (!app.battles.empty()) {
+        const hegemon::BattleReport report = app.battles.front();
+        app.battles.erase(app.battles.begin());
+        try {
+            const auto messages = hegemon::parseStringList(app.data->archive("ESTRINGS.LBX").entry(0));
+            // ESTRINGS.LBX: "A Space Amoeba " ... "A Space Hydra", "The
+            // Guardian", and "%s attacks %s at the %s system".
+            constexpr std::array<std::size_t, 6> kMonsterNames = {514, 159, 160, 161, 162, 163};
+            constexpr std::size_t kAttacksSystem = 49;
+            const std::size_t name = kMonsterNames[static_cast<std::size_t>(report.monster)];
+            if (messages.size() <= std::max(name, kAttacksSystem)) {
+                throw hegemon::FormatError("too few messages in ESTRINGS.LBX");
+            }
+            std::string monster = messages[name];
+            while (!monster.empty() && monster.back() == ' ') {
+                monster.pop_back();
+            }
+            const auto& player = app.game->players.at(static_cast<std::size_t>(report.player));
+            const auto& star = app.game->galaxy.stars.at(static_cast<std::size_t>(report.star));
+            app.attack = std::make_unique<hegemon::WarningBox>(hegemon::WarningBox::attack(
+                *app.data, hegemon::formatMessage(messages[kAttacksSystem], {monster, player.raceName, star.name})));
+            return true;
+        } catch (const std::exception& e) {
+            SDL_Log("The attack could not be shown: %s", e.what());
+        }
+    }
+    return false;
+}
+
+SDL_AppResult attackEvent(App& app, SDL_Event* event) {
+    // Measured: Return closes it; assumed: any key, button or click.
+    const bool close = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_KEY_DOWN ||
+                       event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    if (close) {
+        app.attack.reset();
+        continueTurn(app);
+    }
+    return SDL_APP_CONTINUE;
+}
+
 void continueTurn(App& app) {
+    if (showBattle(app)) {
+        return;
+    }
     if (!showArrival(app)) {
         app.inTurn = false;
         afterTurn(app);
@@ -1562,6 +1614,13 @@ void endTurn(App& app) {
         }
     }
     app.learntTechs = human.learntTechs;
+    // Measured: the attack comes first, then the stars reached.
+    app.battles.clear();
+    for (const hegemon::BattleReport& b : app.game->battles) {
+        if (b.player == 0) {
+            app.battles.push_back(b);
+        }
+    }
     // Measured: a star the human's ships reach first is shown in the
     // middle of the map (assumed: before what else the turn brings).
     app.arrivals.clear();
@@ -2695,6 +2754,9 @@ bool fleetEvent(App& app, SDL_Event* event) {
 // The galaxy map: the home star's name first, then the Turn button (also
 // Enter, or the gamepad's Start); Esc or B goes back to the main menu.
 SDL_AppResult mapEvent(App& app, SDL_Event* event) {
+    if (app.attack) {
+        return attackEvent(app, event);
+    }
     if (app.landing) {
         return landingEvent(app, event);
     }
@@ -3164,6 +3226,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             app->map->draw(app->canvas, app->palette);
             if (app->fleetWindow) {
                 app->fleetWindow->draw(app->canvas, app->palette);
+            }
+            if (app->attack) {
+                app->attack->advance(elapsed);
+                app->attack->draw(app->canvas, app->palette);
             }
             if (app->systemWindow) {
                 app->systemWindow->tick(elapsed);

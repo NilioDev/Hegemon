@@ -52,6 +52,11 @@ constexpr int kWarningX = 154, kWarningY = 144, kWarningCentre = 322, kWarningTe
 constexpr std::size_t kWarningFont = 4;
 constexpr int kWarningSpacing = 2;
 constexpr std::uint8_t kWarnShade1 = 3, kWarnShade2 = 137, kWarnShade3 = 123;
+// The attack message: lines 17 pixels apart, centred on the warning's line
+// (measured), in red (shades fitted to a capture); wrapped to 230
+// pixels (assumed: the measured lines need 218 to 240).
+constexpr int kAttackLineStep = 17, kAttackWrap = 230;
+constexpr std::uint8_t kAttackShade1 = 75, kAttackShade2 = 129, kAttackShade3 = 130;
 constexpr std::uint64_t kPitHz = 1193182, kPitDivisor = 65536, kTicksAFrame = 2;
 
 // The game menu: GAME.LBX 0 at (144, 25), its buttons 1 to 6; the volume
@@ -255,10 +260,19 @@ void SavedGamesWindow::draw(Canvas& canvas, const Palette& palette) const {
 
 WarningBox::WarningBox(GameData& data, std::string text)
     : box_(Image::parse(data.archive(kWarningArchive).entry(0))),
-      fonts_(FontSet::parse(data.archive("FONTS.LBX").entry(0))), text_(std::move(text)) {
+      fonts_(FontSet::parse(data.archive("FONTS.LBX").entry(0))), text_(std::move(text)),
+      shades_{kWarnShade1, kWarnShade2, kWarnShade3} {
     if (box_.frameCount() == 0) {
         throw FormatError("WARNING.LBX: the warning box has no pictures");
     }
+    lines_.push_back(text_);
+}
+
+WarningBox WarningBox::attack(GameData& data, std::string text) {
+    WarningBox box(data, std::move(text));
+    box.shades_ = {kAttackShade1, kAttackShade2, kAttackShade3};
+    box.lines_ = wrapWords(box.fonts_.font(kWarningFont), box.text_, kAttackWrap, kWarningSpacing);
+    return box;
 }
 
 void WarningBox::advance(std::uint64_t ms) {
@@ -278,12 +292,16 @@ void WarningBox::draw(Canvas& canvas, const Palette& palette) const {
     box_.draw(frame, canvas, kWarningX, kWarningY, colours);
     TextStyle style;
     style.spacing = kWarningSpacing;
-    style.shades[1] = kWarnShade1;
-    style.shades[2] = kWarnShade2;
-    style.shades[3] = kWarnShade3;
+    style.shades[1] = shades_[0];
+    style.shades[2] = shades_[1];
+    style.shades[3] = shades_[2];
     const Font& font = fonts_.font(kWarningFont);
-    font.draw(canvas, kWarningCentre - font.textWidth(text_, kWarningSpacing) / 2, kWarningY + kWarningTextY, text_,
-              style);
+    const int count = static_cast<int>(lines_.size());
+    int y = kWarningY + kWarningTextY - ((count - 1) * kAttackLineStep + 1) / 2;
+    for (const std::string& line : lines_) {
+        font.draw(canvas, kWarningCentre - font.textWidth(line, kWarningSpacing) / 2, y, line, style);
+        y += kAttackLineStep;
+    }
 }
 
 GameMenu::GameMenu(GameData& data)
